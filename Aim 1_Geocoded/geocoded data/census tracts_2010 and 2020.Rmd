@@ -1,0 +1,68 @@
+---
+title: "Pulling Census Tracts in King County for Aim 2"
+author: "Andrea Molino"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+---
+
+
+
+```{r, include=TRUE, message=FALSE, warning=FALSE}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+
+### Uncomment and install packages as needed 
+#install.packages("tidyr")
+#install.packages("gmodels")
+#install.packages("tidyverse")
+#install.packages("tidycensus")
+#install.packages("data.table")
+#install.packages("table1")
+#install.packages("tibble")
+#install.packages("purrr")
+#install.packages("labelled")
+#install.packages("grid")
+#install.packages("gridExtra")
+#install.packages("janitor")
+#install.packages("censusapi")
+
+library(dplyr)
+library(tidyverse)
+library(tidycensus)
+library(data.table)
+library(table1)
+library(tibble)
+library(purrr)
+library(labelled)
+library(grid)
+library(gridExtra)
+library(janitor)
+library(censusapi)
+
+# Set API (https://api.census.gov/data/key_signup.html) 
+census_api_key(key = "cc34589a2d42af53b62386856cf83e0afbebb21f", overwrite=TRUE, install=TRUE)
+readRenviron("~/.Renviron")
+
+# Pull in ACS data for 2020 and 2010 
+acs_2020 <- get_acs(geography="tract", variables=c("B01003_001"), state="WA", survey="acs5", year=2020) %>% select(GEOID, NAME)
+acs_2010 <- get_acs(geography="tract", variables=c("B01003_001"), state="WA", survey="acs5", year=2010) %>% select(GEOID, NAME)
+
+# Mark if the census tract is in King County
+acs_2020$king_county <- grepl("King County, Washington", acs_2020$NAME) 
+acs_2010$king_county <- grepl("King County, Washington", acs_2010$NAME) 
+
+acs_2020 <- acs_2020 %>% select(-NAME)
+acs_2010 <- acs_2010 %>% select(-NAME)
+
+table(acs_2020$king_county)
+table(acs_2010$king_county)
+
+# Export these as CSVs for John but don't keep rows as numbers 
+write.csv(acs_2020, "acs_2020_kingcounty.csv", row.names=FALSE)
+write.csv(acs_2010, "acs_2010_kingcounty.csv", row.names=FALSE)
+
+
+```
