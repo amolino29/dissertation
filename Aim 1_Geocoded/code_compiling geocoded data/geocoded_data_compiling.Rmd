@@ -1,0 +1,701 @@
+---
+title: "Geocoded data compiling"
+author: "Andrea Molino"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+This Rmarkdown was created to pull in all of the publicly available geocoded, census tract level data that I will be using in my dissertation Aim 1. The final product will be a single data file with all of my geocoded variables, with one row for each census tract in Washington. I will be using 2020 Census tract boundaries. The following variables will be pulled from the following sources:
+
+* **CDC ATSDR**:  
+  * State-based Social Vulnerability Index (SVI)
+* **University of Michigan National Neighborhood Data Archive (NaNDA)**: 
+  * Neighborhood affluence
+* **2020 5-year American Community Survey estimates (table listed along with variable description)**: 
+    * Housing cost burden - B25106
+    * Renter-occupied household status - B25008 
+    * Poverty status - C17002
+    * Median income - B21004
+    * Unemployment status - B23025  
+    * Vehicle access - B08201
+
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+### Setup and pulling in packages
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(table1)
+library(knitr)
+library(kableExtra)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(tidycensus)
+library(haven)
+
+### Pull in list of 2020 Washington Census tracts 
+wa_tracts2020 <- read.csv("census_tracts/acs_2020_kingcounty.csv")
+table(wa_tracts2020$king_county)
+
+### Create list of Washington census tracts 
+list_wa_tracts2020 <- wa_tracts2020$GEOID
+
+### Create list of King County census tracts 
+list_kingcounty_tracts2020 <- wa_tracts2020$GEOID[wa_tracts2020$king_county==1]
+
+
+```
+
+# CDC ASTDR: State-based SVI 
+
+This section pulls in the state-based social vulnerability index (SVI) that was downloaded directly from the [CDC website](https://www.atsdr.cdc.gov/placeandhealth/svi/data_documentation_download.html).
+The variable we are using here is `RPL_THEMES`, which is the overall state-based SVI score FROM the Washington specific data download. I also pulled the `RPL_THEMES` variable from the entire United States data download to compare the two.
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+### Pull in state-based SVI data
+svi_state <- read.csv("C:/Users/amoli/OneDrive - UW/Dissertation/Aim 1_Geocoded/geocoded data/CDC_ATSDR/Washington.csv")
+svi_state <- svi_state %>% select(STATE, FIPS, LOCATION, RPL_THEME1, RPL_THEME2, RPL_THEME3, RPL_THEME4, RPL_THEMES)
+
+
+### Pull in all SVI data 
+svi_usa <- read.csv("C:/Users/amoli/OneDrive - UW/Dissertation/Aim 1_Geocoded/geocoded data/CDC_ATSDR/SVI_2020_US.csv") %>% subset(STATE=="Washington")
+svi_usa <- svi_usa %>% select(STATE, FIPS, LOCATION, RPL_THEME1, RPL_THEME2, RPL_THEME3, RPL_THEME4, RPL_THEMES) %>% 
+  rename(RPL_THEME1_USA = RPL_THEME1, 
+         RPL_THEME2_USA = RPL_THEME2, 
+         RPL_THEME3_USA = RPL_THEME3, 
+         RPL_THEME4_USA = RPL_THEME4, 
+         RPL_THEMES_USA = RPL_THEMES)
+
+
+### Drop -999 values
+svi_state <- svi_state %>% mutate(RPL_THEMES = ifelse(RPL_THEMES==-999, NA, RPL_THEMES)) %>% select(FIPS, RPL_THEMES)
+svi_usa   <- svi_usa   %>% mutate(RPL_THEMES_USA = ifelse(RPL_THEMES_USA==-999, NA, RPL_THEMES_USA)) %>% select(FIPS, RPL_THEMES_USA)
+
+
+
+### Verify that the SVI from the state vs. country data are different, confirmed 
+svi_both <- merge(svi_state, svi_usa, by="FIPS", all=TRUE)
+svi_both <- svi_both %>% rename(GEOID = FIPS)
+
+
+### Create histogram 
+# All fairly uniform which makes sense since everything is based off of Washington 
+svi_both %>% ggplot(aes(x=RPL_THEMES)) + 
+  geom_histogram(binwidth=0.02, fill="#0072B2", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("State-Based SVI in Washington Distribution")
+
+svi_both %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+  ggplot(aes(x=RPL_THEMES)) + 
+  geom_histogram(binwidth=0.02, fill="#009E73", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("State-Based SVI in King County Distribution")
+
+svi_both %>% ggplot(aes(x=RPL_THEMES_USA)) + 
+  geom_histogram(binwidth=0.02, fill="#0072B2", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("USA SVI in Washington Distribution")
+
+svi_both %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+  ggplot(aes(x=RPL_THEMES_USA)) + 
+  geom_histogram(binwidth=0.02, fill="#009E73", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("USA SVI in King County Distribution")
+
+
+
+```
+
+# University of Michigan NaNDA: Neighborhood Affluence 
+
+The data source for neighborhood affluence can be found [here](https://nanda.isr.umich.edu/data/). It comes from the University of Michigan National Neighborhood Data Archive, or NaNDA. The variable of interest is `AFFLUENCE16_20`. This data source can be found by going to the website, clicking on "Data", then "Socioeconomic Status and Demographic Characteristics", which will take you to a data download option. I downloaded the data in "R" format, and is stored in the ICPSR_38528 folder. There are 5 folders of data, and we are using "DS0004", as is the data set for 2016-2020 data for Census Tracts. 
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+### Pull in neighborhood affluence data, RDA file
+load("C:/Users/amoli/OneDrive - UW/Dissertation/Aim 1_Geocoded/geocoded data/ICPSR_38528/DS0004/38528-0004-Data.rda")
+affluence <- da38528.0004
+rm(da38528.0004)
+
+
+### Only keep tract and affluence variable, and then only keep tracts within Washington to create the distribution 
+affluence <- affluence %>% filter(TRACT_FIPS20 %in% list_wa_tracts2020) %>% select(TRACT_FIPS20, AFFLUENCE16_20, PED3_16_20, PFAMINCGE125K16_20, PPROF16_20)
+affluence <- affluence %>% rename(GEOID = TRACT_FIPS20)
+
+
+### Look at distribution of affluence across Washington state (does not go below 0 and does not go above 1)
+summary(affluence$AFFLUENCE16_20)
+
+
+### Make sure you understand affluence --> yes, affluence is just the average of the three variables (proportion of people with a bachelors degree or higher, proportion with income 125k or higher, and proportion of civilian employed population in management, business, science, and arts occupations)
+affluence <- affluence %>% mutate(AFFLUENCE16_20_armcreate = (PED3_16_20 + PFAMINCGE125K16_20 + PPROF16_20)/3)
+head(affluence) 
+
+
+### Create histogram
+affluence %>% ggplot(aes(x=AFFLUENCE16_20)) + 
+  geom_histogram(binwidth=0.02, fill="#0072B2", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Affluence in Washington Distribution")
+
+affluence %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+  ggplot(aes(x=AFFLUENCE16_20)) + 
+  geom_histogram(binwidth=0.02, fill="#009E73", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Affluence in King County Distribution")
+
+
+
+```
+
+
+# American Community Survey
+
+This is the data source for the six remaining census tract-level effect modifiers, specifically:
+
+* Housing cost burden - B25106
+* Renter-occupied household status - B25008 
+* Poverty status - C17002
+* Median income - B21004
+* Unemployment status - B23025  
+* Vehicle access - B08201
+
+While all of these variables/values can technically be pulled from the Census's data tables (links below), I opted to use the `tidycensus` R package for reproducibility purposes. The `tidycensus` package allows for easy access to the Census API, and the package is updated regularly to ensure that the data being pulled is the most recent. The reference manual can be found [here](https://cran.r-project.org/web/packages/tidycensus/tidycensus.pdf). 
+
+I also used Social Explorer to identify the correct variable names for the 2020 5-year estimate ACS tables. The ACS tables can be found [here](https://www.socialexplorer.com/data/ACS2020_5yr/metadata/?ds=ACS20_5yr).
+
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+# Set API (https://api.census.gov/data/key_signup.html) 
+# Andrea's census API: cc34589a2d42af53b62386856cf83e0afbebb21f
+census_api_key(key = "cc34589a2d42af53b62386856cf83e0afbebb21f", overwrite=TRUE, install=TRUE)
+readRenviron("~/.Renviron")
+
+# Load ACS variable names to check variables being used 
+acs_vars_2020 <- load_variables(2020, "acs5", cache = TRUE)
+
+
+```
+
+## Housing cost burden: B25106
+
+The ACS Table used for these estimates is B25106: "TENURE BY HOUSING COSTS AS A PERCENTAGE OF HOUSEHOLD INCOME IN THE PAST 12 MONTHS". The ACS table can be found [here](https://data.census.gov/table/ACSDT5Y2020.B25106?q=B25106:%20Tenure%20by%20Housing%20Costs%20as%20a%20Percentage%20of%20Household%20Income%20in%20the%20Past%2012%20Months&g=040XX00US53). The Social Explorer table names can be found [here](https://www.socialexplorer.com/data/ACS2020_5yr/metadata/?ds=ACS20_5yr&table=B25106). 
+
+This ACS table includes a row for owner-occupied housing units with "zero or negative income", as well as renter-occupied housing units with "zero or negative income" as well as a row for "no cash rent". Per the Harvard Joint Center for Housing Studies, "housing cost burden", moderate or higher, is defined as spending 30% or more of one's income on housing. They state that they deal with the "zero or negative income" and "no cash rent" groups as follows: "Households with zero or negative income are assumed to have burdens, and households that are not required to pay rent are assumed to be unburdened". See Figure 3 Notes in the [JCHS report here](https://www.jchs.harvard.edu/sites/default/files/reports/files/Harvard_JCHS_Americas_Rental_Housing_2024.pdf). I incorporated this approach into my code below for calculating housing cost burden.
+
+**VARIABLE DEFINITION**: percentage of occupied housing units that spend 30% or more of their income on housing, including both renter- and owner-occupied housing units 
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Housing cost burden: B25106
+# B25106_001: denominator --> total number of occupied housing units
+# B25106_006, B25106_010, B25106_014, B25106_018, B25106_022, B25106_028, B25106_032, B25106_036, B25106_040, B25106_044: all those who spend 30% or more on their 
+# B25106_023, B25106_045: zero or negative income
+# B25106_046: no cash rent variables 
+acs_housingcost <- get_acs(geography="tract",
+                           variables=c("B25106_001", 
+                                       "B25106_006", "B25106_010", "B25106_014", "B25106_018", "B25106_022", 
+                                       "B25106_028", "B25106_032", "B25106_036", "B25106_040", "B25106_044",
+                                       "B25106_023", "B25106_045", 
+                                       "B25106_046"), 
+                           state="WA", 
+                           survey="acs5", 
+                           year=2020)
+
+acs_housingcost <- acs_housingcost %>%
+  dplyr::select(., -moe, -NAME) %>% 
+  pivot_wider(id_cols = GEOID, names_from = variable, values_from = estimate) %>% 
+  rename(total = B25106_001) %>% 
+  mutate(burden_gte30 = B25106_006 + B25106_010 + B25106_014 + B25106_018 + 
+           B25106_022 + B25106_028 + B25106_032 + B25106_036 + B25106_040 + B25106_044, 
+         zero_neg_inc = B25106_023 + B25106_045,
+         no_cash_rent = B25106_046,
+         perc_burden_gte30 = ((zero_neg_inc + burden_gte30)/total)*100) %>% 
+  dplyr::select(GEOID, perc_burden_gte30)
+
+
+### Create histogram
+acs_housingcost %>% ggplot(aes(x=perc_burden_gte30)) + 
+  geom_histogram(binwidth=1.5, fill="#0072B2", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Percentage considered housing cost burdened in Washington Distribution")
+
+acs_housingcost %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+  ggplot(aes(x=perc_burden_gte30)) + 
+  geom_histogram(binwidth=1.5, fill="#009E73", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Percentage considered housing cost burdened in King County Distribution")
+
+
+
+```
+
+
+## Renter-occupied household status: B25008
+
+The ACS Table used for these estimates is B25008: "TOTAL POPULATION IN OCCUPIED HOUSING UNITS BY TENURE". The ACS table can be found [here](https://data.census.gov/table/ACSDT5Y2020.B25008?q=B25008&g=040XX00US53). The Social Explorer table names can be found [here](https://www.socialexplorer.com/data/ACS2020_5yr/metadata/?ds=ACS20_5yr&table=B25008). 
+
+**VARIABLE DEFINITION**: percentage of the total population who live in occupied housing units that are renters 
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Renter-occupied household status: B25008
+# B25008_001: denominator --> total population in occupied housing units
+# B25008_002: total population in owner-occupied housing
+# B25008_003: total population in renter-occupied housing  
+acs_renterocc <- get_acs(geography="tract",
+                         variables=c("B25008_001", "B25008_002", "B25008_003"), 
+                         state="WA", 
+                         survey="acs5", 
+                         year=2020)
+
+acs_renterocc <- acs_renterocc %>%
+  dplyr::select(., -moe, -NAME) %>% 
+  pivot_wider(id_cols = GEOID, names_from = variable, values_from = estimate) %>% 
+  rename(total = B25008_001) %>% 
+  mutate(perc_renter = (B25008_003/total)*100) %>% 
+  dplyr::select(GEOID, perc_renter)
+
+
+### Create histogram
+acs_renterocc %>% ggplot(aes(x=perc_renter)) + 
+  geom_histogram(binwidth=1.5, fill="#0072B2", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Percentage renters in Washington Distribution")
+
+acs_renterocc %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+  ggplot(aes(x=perc_renter)) + 
+  geom_histogram(binwidth=1.5, fill="#009E73", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Percentage renters in King County Distribution")
+
+
+```
+
+
+## Poverty status: C17002
+
+The ACS Table used for these estimates is C17002: "RATIO OF INCOME TO POVERTY LEVEL IN THE PAST 12 MONTHS". The ACS table can be found [here](https://data.census.gov/table?q=C17002:%20Ratio%20of%20Income%20to%20Poverty%20Level%20in%20the%20Past%2012%20Months&g=040XX00US53). The Social Explorer table names can be found [here](https://www.socialexplorer.com/data/ACS2020_5yr/metadata/?ds=ACS20_5yr&table=C17002).  
+
+I was initially planning to use [ACS Table S1701](https://data.census.gov/table?q=S1701:%20Poverty%20Status%20in%20the%20Past%2012%20Months&g=040XX00US53). However, this type of table cannot be pulled into R using `tidycensus`, so I opted to use C17002 instead. I made sure that I could get the correct number of people below 150% of the poverty level from Table S1701 in Washington using Table C17002. With Table C17002, I can get the total population below 150% of the poverty level by adding C17002_002 through C17002_005.
+
+**VARIABLE DEFINITION**: percentage of the total population for whom poverty status is determined who are below 150% of the poverty level in the past 12 months (i.e., ratio of income to poverty level in the past 12 months is <1.50) 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Poverty status: C17002
+# C17002_001: total population for whom poverty status is determined 
+# C17002_002: Under .50
+# C17002_003: .50 To .99
+# C17002_004: 1.00 To 1.24
+# C17002_005: 1.25 To 1.49
+# C17002_006: 1.50 To 1.84
+# C17002_007: 1.85 To 1.99
+# C17002_008: 2.00 And Over
+acs_lt150poverty <- get_acs(geography="tract",
+                            variables=c("C17002_001", "C17002_002", "C17002_003", "C17002_004", 
+                                        "C17002_005", "C17002_006", "C17002_007", "C17002_008"), 
+                            state="WA",
+                            survey="acs5", 
+                            year=2020)
+
+acs_lt150poverty <- acs_lt150poverty %>%
+  dplyr::select(., -moe, -NAME) %>% 
+  pivot_wider(id_cols = GEOID, names_from = variable, values_from = estimate) %>% 
+  rename(total = C17002_001) %>% 
+  mutate(perc_lt150poverty = ((C17002_002 + C17002_003 + C17002_004 + C17002_005)/total)*100) %>% 
+  dplyr::select(GEOID, perc_lt150poverty)
+
+
+### Create histogram
+acs_lt150poverty %>% ggplot(aes(x=perc_lt150poverty)) + 
+  geom_histogram(binwidth=1.5, fill="#0072B2", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Percentage below 150% of the poverty level in Washington Distribution")
+
+acs_lt150poverty %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+  ggplot(aes(x=perc_lt150poverty)) + 
+  geom_histogram(binwidth=1.5, fill="#009E73", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Percentage below 150% of the poverty level in King County Distribution")
+
+
+```
+
+
+
+## Median income: B21004 
+
+The ACS Table used for these estimates is B21004: "MEDIAN INCOME IN THE PAST 12 MONTHS (IN 2020 INFLATION-ADJUSTED DOLLARS) BY VETERAN STATUS BY SEX FOR THE CIVILIAN POPULATION 18 YEARS AND OVER WITH INCOME". The ACS table can be found [here](https://data.census.gov/table/ACSDT5Y2020.B21004?q=B21004:%20Median%20Income%20in%20the%20Past%2012%20Months%20(in%202022%20Inflation-Adjusted%20Dollars)%20by%20Veteran%20Status%20by%20Sex%20for%20the%20Civilian%20Population%2018%20Years%20and%20Over%20With%20Income&g=040XX00US53). The Social Explorer table names can be found [here](https://www.socialexplorer.com/data/ACS2020_5yr/metadata/?ds=ACS20_5yr&table=B21004). Though this table is stratified into veteran vs. nonveteran status, I am only taking the "total" population, so it is the median income for the entire civilian population.  
+
+**VARIABLE DEFINITION**: median income in the past 12 months (in 2020 inflation-adjusted US dollars) for those over the age of 18 years with income
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Median income: B21004 (since this is a continuous variable for the total applicable population, less manipulation is needed)
+acs_medianinc <- get_acs(geography="tract",
+                         variables=c("B21004_001"), 
+                         state="WA", 
+                         survey="acs5", 
+                         year=2020)
+
+acs_medianinc <- acs_medianinc %>%
+  dplyr::select(., -moe, -NAME) %>% 
+  pivot_wider(id_cols = GEOID, names_from = variable, values_from = estimate) %>% 
+  rename(medianincome = B21004_001) %>% 
+  dplyr::select(GEOID, medianincome)
+
+
+### Create histogram
+acs_medianinc %>% ggplot(aes(x=medianincome)) + 
+  geom_histogram(binwidth=2500, fill="#0072B2", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Median income in Washington Distribution") + 
+  scale_x_continuous(labels = scales::number_format())
+
+acs_medianinc %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+  ggplot(aes(x=medianincome)) + 
+  geom_histogram(binwidth=2500, fill="#009E73", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Median income in King County Distribution") + 
+  scale_x_continuous(labels = scales::number_format())
+
+
+```
+
+
+## Unemployment status - B23025
+
+The ACS Table used for these estimates is B23025: "EMPLOYMENT STATUS FOR THE POPULATION 16 YEARS AND OVER". The ACS table can be found [here](https://data.census.gov/table?q=B23025:%20Employment%20Status%20for%20the%20Population%2016%20Years%20and%20Over&g=040XX00US53). The Social Explorer table names can be found [here](https://www.socialexplorer.com/data/ACS2020_5yr/metadata/?ds=ACS20_5yr&table=B23025).
+
+There were a few unemployment variables to choose from, but this one was selected to align as closely as possible with the Bureau of Labor Statistics unemployment statistics, which defines the labor force specifically as the civilian, non-institutionalized labor force, which includes all people age 16 and older who are classified as either employed and unemployed (BLS information [here](https://www.bls.gov/cps/definitions.htm)). Thus, my definition will exclude those in the armed forces and those not in the labor force. 
+
+**VARIABLE DEFINITION**: percentage of the civilian population over 16 years of age in the labor force who are unemployed 
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Unemployment status: B23025
+# B23025_003: total population 16 years and older in the civilian labor force 
+# B23025_004: employed, over 16 years and in the civilian labor force
+# B23025_005: unemployed, over 16 years and in the civilian labor force
+acs_unemploy <- get_acs(geography="tract",
+                        variables=c("B23025_003", "B23025_004", "B23025_005"),
+                        state="WA",
+                        survey="acs5",
+                        year=2020)
+
+acs_unemploy <- acs_unemploy %>%
+  dplyr::select(., -moe, -NAME) %>%
+  pivot_wider(id_cols = GEOID, names_from = variable, values_from = estimate) %>%
+  rename(total = B23025_003) %>%
+  mutate(perc_unemployed = (B23025_005/total)*100) %>%
+  dplyr::select(GEOID, perc_unemployed)
+
+
+### Create histogram
+acs_unemploy %>% ggplot(aes(x=perc_unemployed)) + 
+  geom_histogram(binwidth=0.5, fill="#0072B2", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Percentage of civilian population that is unemployed in Washington Distribution") + 
+  xlim(0, 32)
+
+acs_unemploy %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+  ggplot(aes(x=perc_unemployed)) + 
+  geom_histogram(binwidth=0.5, fill="#009E73", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Percentage of civilian population that is unemployed in King County Distribution") + 
+  xlim(0, 32)
+
+
+```
+
+
+## Vehicle access - B08201 
+
+The ACS Table used for these estimates is B08201: "HOUSEHOLD SIZE BY VEHICLES AVAILABLE". The ACS table can be found [here](https://data.census.gov/table/ACSDT5Y2020.B08201?q=B08201:%20Household%20Size%20by%20Vehicles%20Available&g=040XX00US53). The Social Explorer table names can be found [here](https://www.socialexplorer.com/data/ACS2020_5yr/metadata/?ds=ACS20_5yr&table=B08201). I decided to use this variable based on a presentation I saw looking at vehicle access and prenatal healthcare utilization in Allegheny County in Pennsylvania while at CSTE. I talked to the analyst on the abstract afterwards. Here is a [report](https://www.alleghenycounty.us/files/assets/county/v/1/services/dhs/documents/annual-plans-and-budgets/csbg/2021-community-needs-assessment-economic-security.pdf) from this county using this ACS variable (Figure 16).  
+
+**VARIABLE DEFINITION**: percentage of households with no vehicle access regardless of household size 
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# B08201_001: total number of households
+# B08201_002: total number of households with no vehicle available, not stratified by size of household 
+# B08201_008, B08201_014, B08201_020, B08201_026: households with no vehicle available stratified by size of household (pulled these in just as a check, but only need B08201_002 and the total to calculate our variable of interest)
+acs_vehicleacc <- get_acs(geography="tract",
+                          variables=c("B08201_001", "B08201_002", "B08201_008", "B08201_014", "B08201_020", "B08201_026"), 
+                          state="WA", 
+                          survey="acs5", 
+                          year=2020)
+
+acs_vehicleacc <- acs_vehicleacc %>%
+  dplyr::select(., -moe, -NAME) %>% 
+  pivot_wider(id_cols = GEOID, names_from = variable, values_from = estimate) %>% 
+  rename(total = B08201_001) %>% 
+  mutate(perc_novehicle = (B08201_002/total)*100) %>% 
+  dplyr::select(GEOID, perc_novehicle)
+
+
+### Create histogram
+acs_vehicleacc %>% ggplot(aes(x=perc_novehicle)) + 
+  geom_histogram(binwidth=1.5, fill="#0072B2", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Percentage of households with no vehicle access in Washington Distribution") +
+  xlim(0, 100)
+
+acs_vehicleacc %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+  ggplot(aes(x=perc_novehicle)) + 
+  geom_histogram(binwidth=1.5, fill="#009E73", color="gray20") + 
+  theme_minimal() + 
+  ggtitle("Percentage of households with no vehicle access in King County Distribution") +
+  xlim(0, 100)
+
+
+```
+
+
+
+# Create quartiles for all data frames 
+
+Here is where I created quartiles for all the variables of interest within their own data frames. The coding scheme here is 1 for the BEST SES (i.e., "higher" SES) tracts, and 4 for the WORST SES (i.e., "lower" SES) tracts. This applies to all 8 geocoded variables I am working with for this analysis. I am doing one 1-4 scale for each variable for Washington State, and then again for King County. 
+
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+### Convert SVI and affluence GEOIDs to character variables for merging 
+svi_both$GEOID  <- as.character(svi_both$GEOID)
+affluence$GEOID <- as.character(affluence$GEOID)
+
+
+### CREATE QUARTILES in each dataset for Washington State as a whole and then for King County 
+# State-based SVI
+svi_merging <- svi_both %>% 
+  mutate(RPL_THEMES_QUARTILE_WA = ntile(RPL_THEMES, 4)) %>% 
+  left_join(
+    svi_both %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+      mutate(RPL_THEMES_QUARTILE_KC = ntile(RPL_THEMES, 4)) %>% 
+      select(GEOID, RPL_THEMES_QUARTILE_KC),  
+    by="GEOID")
+
+
+# Affluence (need to flip 1 through 4 here because low=bad and high=good, opposite the other indicators)
+affluence_merging <- affluence %>% 
+  mutate(affluence_quartile_WA = ntile(AFFLUENCE16_20, 4)) %>% 
+  left_join(
+    affluence %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+      mutate(affluence_quartile_KC = ntile(AFFLUENCE16_20, 4)) %>% 
+      select(GEOID, affluence_quartile_KC),  
+    by="GEOID")
+
+affluence_merging <- affluence_merging %>% 
+  mutate(affluence_quartile_WA = 5 - affluence_quartile_WA, 
+         affluence_quartile_KC = 5 - affluence_quartile_KC)
+
+
+# Housing cost burden
+acs_housingcost_merging <- acs_housingcost %>% 
+  mutate(perc_burden_gte30_quartile_WA = ntile(perc_burden_gte30, 4)) %>% 
+  left_join(
+    acs_housingcost %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+      mutate(perc_burden_gte30_quartile_KC = ntile(perc_burden_gte30, 4)) %>% 
+      select(GEOID, perc_burden_gte30_quartile_KC),  
+    by="GEOID")
+
+
+# Renter-occupied household status
+acs_renterocc_merging <- acs_renterocc %>% 
+  mutate(perc_renter_quartile_WA = ntile(perc_renter, 4)) %>% 
+  left_join(
+    acs_renterocc %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+      mutate(perc_renter_quartile_KC = ntile(perc_renter, 4)) %>% 
+      select(GEOID, perc_renter_quartile_KC),  
+    by="GEOID")
+
+
+# Poverty status
+acs_lt150poverty_merging <- acs_lt150poverty %>% 
+  mutate(perc_lt150poverty_quartile_WA = ntile(perc_lt150poverty, 4)) %>% 
+  left_join(
+    acs_lt150poverty %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+      mutate(perc_lt150poverty_quartile_KC = ntile(perc_lt150poverty, 4)) %>% 
+      select(GEOID, perc_lt150poverty_quartile_KC),  
+    by="GEOID")
+
+
+# Median income (need to flip 1 through 4 here because low=bad and high=good, opposite the other indicators)
+acs_medianinc_merging <- acs_medianinc %>% 
+  mutate(medianincome_quartile_WA = ntile(medianincome, 4)) %>% 
+  left_join(
+    acs_medianinc %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+      mutate(medianincome_quartile_KC = ntile(medianincome, 4)) %>% 
+      select(GEOID, medianincome_quartile_KC),  
+    by="GEOID")
+
+acs_medianinc_merging <- acs_medianinc_merging %>% 
+  mutate(medianincome_quartile_WA = 5 - medianincome_quartile_WA, 
+         medianincome_quartile_KC = 5 - medianincome_quartile_KC)
+
+
+# Unemployment status
+acs_unemploy_merging <- acs_unemploy %>% 
+  mutate(perc_unemployed_quartile_WA = ntile(perc_unemployed, 4)) %>% 
+  left_join(
+    acs_unemploy %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+      mutate(perc_unemployed_quartile_KC = ntile(perc_unemployed, 4)) %>% 
+      select(GEOID, perc_unemployed_quartile_KC),  
+    by="GEOID")
+
+
+# Vehicle access
+acs_vehicleacc_merging <- acs_vehicleacc %>% 
+  mutate(perc_novehicle_quartile_WA = ntile(perc_novehicle, 4)) %>% 
+  left_join(
+    acs_vehicleacc %>% filter(GEOID %in% list_kingcounty_tracts2020) %>% 
+      mutate(perc_novehicle_quartile_KC = ntile(perc_novehicle, 4)) %>% 
+      select(GEOID, perc_novehicle_quartile_KC),  
+    by="GEOID")
+
+
+```
+
+
+# Merging all together for 1 unified data set 
+
+Here, I combine all 8 datasets for all 8 geocoded variables that can be sent to KPWA and merged with STEP data at the census tract level to create a final, unified dataset. 
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+### Merge SVI data
+STEP_geocoded_data <- merge(wa_tracts2020, svi_merging, by="GEOID", all.x=TRUE)
+
+### Merge affluence data
+STEP_geocoded_data <- merge(STEP_geocoded_data, affluence_merging, by="GEOID", all.x=TRUE)
+
+### Merge housing cost burden data
+STEP_geocoded_data <- merge(STEP_geocoded_data, acs_housingcost_merging, by="GEOID", all.x=TRUE)
+
+### Merge renter-occupied household status data
+STEP_geocoded_data <- merge(STEP_geocoded_data, acs_renterocc_merging, by="GEOID", all.x=TRUE)
+
+### Merge poverty status data
+STEP_geocoded_data <- merge(STEP_geocoded_data, acs_lt150poverty_merging, by="GEOID", all.x=TRUE)
+
+### Merge median income data
+STEP_geocoded_data <- merge(STEP_geocoded_data, acs_medianinc_merging, by="GEOID", all.x=TRUE)
+
+### Merge unemployment status data
+STEP_geocoded_data <- merge(STEP_geocoded_data, acs_unemploy_merging, by="GEOID", all.x=TRUE)
+
+### Merge vehicle access data
+STEP_geocoded_data <- merge(STEP_geocoded_data, acs_vehicleacc_merging, by="GEOID", all.x=TRUE)
+
+### Save dataset that's JUST the quartile variables, i.e., drop continuous variables
+STEP_geocoded_data_quarts <- STEP_geocoded_data %>% 
+  select(-RPL_THEMES, -RPL_THEMES_USA, -AFFLUENCE16_20, -perc_burden_gte30, -perc_renter, 
+         -perc_lt150poverty, -medianincome, -perc_unemployed, -perc_novehicle)
+
+```
+
+# Assessing missingness of variables for census tracts 
+
+I also assess for missingness of the variables of interest in the final dataset. 
+
+```{r, include=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+# Create a table to see missingness for all geocoded data 
+table1(~ factor(RPL_THEMES_QUARTILE_WA) + 
+         factor(affluence_quartile_WA) + 
+         factor(perc_burden_gte30_quartile_WA) + 
+         factor(perc_renter_quartile_WA) + 
+         factor(perc_lt150poverty_quartile_WA) +
+         factor(medianincome_quartile_WA) +
+         factor(perc_unemployed_quartile_WA) +
+         factor(perc_novehicle_quartile_WA), 
+       data=STEP_geocoded_data)
+
+# Create dataset to see which of the census tracts are missing this information, as they're likely industrial or park areas
+missing_data <- STEP_geocoded_data %>% select(GEOID, 
+                                              RPL_THEMES_QUARTILE_WA, 
+                                              affluence_quartile_WA, 
+                                              perc_burden_gte30_quartile_WA, 
+                                              perc_renter_quartile_WA, 
+                                              perc_lt150poverty_quartile_WA, 
+                                              medianincome_quartile_WA, 
+                                              perc_unemployed_quartile_WA, 
+                                              perc_novehicle_quartile_WA)
+
+rows_with_na   <- which(rowSums(is.na(missing_data)) > 0)
+missing_quart  <- missing_data$GEOID[rows_with_na]
+missing_quart  <- as.data.frame(missing_quart)
+print(missing_quart)
+
+
+```
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+
+### Save datasets as CSVs AND SAS files for KPWA
+write.csv(STEP_geocoded_data,        "final geocoded data/STEP_geocoded_data.csv", row.names = FALSE)
+write.csv(STEP_geocoded_data_quarts, "final geocoded data/STEP_geocoded_data_onlyquartiles.csv", row.names = FALSE)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r, echo=FALSE, include=FALSE, message=FALSE, warning=FALSE}
+### Old code no longer using 
+# Create SVI quartiles for both WA state and USA variables 
+# summary(svi_both$RPL_THEMES)
+# summary(svi_both$RPL_THEMES_USA)
+# 
+# svi_both <- svi_both %>% 
+#   mutate(RPL_THEMES_QUARTILE = ntile(RPL_THEMES, 4)) 
+# 
+# svi_both <- svi_both %>% 
+#   mutate(RPL_THEMES_USA_QUARTILE = ntile(RPL_THEMES_USA, 4)) 
+# 
+# # Identify discrepancies between state and USA SVI quartiles
+# svi_both <- svi_both %>% 
+#   mutate(svi_concord = case_when(RPL_THEMES_QUARTILE == RPL_THEMES_USA_QUARTILE ~ "Same", 
+#                                  RPL_THEMES_QUARTILE  > RPL_THEMES_USA_QUARTILE ~ "State based higher than US", 
+#                                  RPL_THEMES_QUARTILE  < RPL_THEMES_USA_QUARTILE ~ "US higher than state based", 
+#                                  is.na(RPL_THEMES_QUARTILE) & is.na(RPL_THEMES_USA_QUARTILE) ~ "Missing",
+#                                  TRUE ~ "XXX"))
+
+```
+
+
+
+

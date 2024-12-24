@@ -1,0 +1,153 @@
+---
+title: "power calculation_aim 3"
+author: "Andrea Molino"
+date: "2024-12-23"
+output: html_document
+---
+
+
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### Run Rmarkdown that pulls in BRFSS data needed for this power calculation 
+rmarkdown::render("C:\Users\amoli\OneDrive - UW\Dissertation\Aim 3_Dobbs")
+
+### Pull in necessary libraries
+library(data.table)
+library(table1)
+library(lme4)
+library(simr)
+library(Matrix)
+library(Rcpp)
+library(RcppEigen)
+
+
+# Drop all variables I don't NEED for power calculation, aka just the state, the post Dobbs category, and the BRFSS survey year
+brfss_2022_anal <- brfss_2022 %>% mutate(year_brfss = 2022) %>% select(state_name, postdobbs_cat, `_PSU`, year_brfss)
+brfss_2020_anal <- brfss_2020 %>% mutate(year_brfss = 2020) %>% select(state_name, postdobbs_cat, `_PSU`, year_brfss)
+brfss_2018_anal <- brfss_2018 %>% mutate(year_brfss = 2018) %>% select(state_name, postdobbs_cat, `_PSU`, year_brfss)
+brfss_2016_anal <- brfss_2016 %>% mutate(year_brfss = 2016) %>% select(state_name, postdobbs_cat, `_PSU`, year_brfss)
+
+# Combine all data frames for power caluclation 
+brfss_anal <- rbind(brfss_2016_anal, brfss_2018_anal, brfss_2020_anal, brfss_2022_anal)
+
+
+# Simulate cervical cancer screening outcome in 2016-2022 data, use 2021 estimate of 73.9% in 2021 as estimate from Healthy People 2030 https://health.gov/healthypeople/objectives-and-data/browse-objectives/cancer/increase-proportion-females-who-get-screened-cervical-cancer-c-09
+set.seed(1842)
+brfss_anal$outcome <- sample(c(1, 0), size = 109065, replace = TRUE, prob = c(0.739, 0.261))
+table(brfss_anal$outcome, useNA = "always")
+prop.table(table(brfss_anal$outcome, useNA = "always"))
+table1(~ factor(outcome) | postdobbs_cat, data = brfss_anal)
+
+brfss_anal$outcome_2 <- brfss_anal$outcome
+brfss_anal$outcome_3 <- brfss_anal$outcome
+
+
+### Create a dummy dataset for 2024 data --> need about 25,000 patients
+# Look to see the distribution of banned vs. accessible states in the 2016-2022 dataset --> 88% accessible, 12% banned, keep this distribution. A bit of change over time but that's fine 
+prop.table(table(brfss_anal$postdobbs_cat))
+table1(~ postdobbs_cat | year_brfss, data = brfss_anal)
+
+# Create a dataset with 25,000 patients, with the same distribution of banned vs. accessible states as the 2016-2022 dataset
+set.seed(4615)
+brfss_2024_sim <- data.frame(state_name = sample(brfss_anal$state_name, 25000, replace = TRUE), 
+                             `_PSU` = sample(brfss_anal$`_PSU`, 25000, replace = TRUE), 
+                             year_brfss = 2024)
+
+# Merge in state_cats to categorize accordingly 
+brfss_2024_sim <- left_join(brfss_2024_sim, state_cats, by = c("state_name" = "State"))
+brfss_2024_sim <- brfss_2024_sim %>% arrange(state_name) %>% rename(postdobbs_cat = `Final Categorization`, 
+                                                                    `_PSU` = X_PSU)
+# Check distribution 
+table1(~ state_name, data = brfss_2024_sim)
+table1(~ postdobbs_cat, data = brfss_2024_sim)
+
+# Now simulate cervical cancer screening outcome in simulated 2024 data, but 68.9% outcome in banned states and keep 73.9% in accessible states (aka 5% change)
+set.seed(555)
+brfss_2024_sim$outcome <- ifelse(brfss_2024_sim$postdobbs_cat == "Accessible",
+                                 sample(c(1, 0), size = sum(brfss_2024_sim$postdobbs_cat == "Accessible"), replace = TRUE, prob = c(0.739, 0.261)),
+                                 sample(c(1, 0), size = sum(brfss_2024_sim$postdobbs_cat == "Banned"),     replace = TRUE, prob = c(0.689, 0.311)))
+
+table1(~ factor(outcome) | postdobbs_cat, data = brfss_2024_sim)
+
+# Simulate another cervical cancer screening outcome in simulated 2024 data, but do 70.9% outcome in banned states and keep 73.9% in accessible states (aka 3% change)
+set.seed(9922)
+brfss_2024_sim$outcome_2 <- ifelse(brfss_2024_sim$postdobbs_cat == "Accessible",
+                                   sample(c(1, 0), size = sum(brfss_2024_sim$postdobbs_cat == "Accessible"), replace = TRUE, prob = c(0.739, 0.261)),
+                                   sample(c(1, 0), size = sum(brfss_2024_sim$postdobbs_cat == "Banned"),     replace = TRUE, prob = c(0.709, 0.291)))
+
+table1(~ factor(outcome_2) | postdobbs_cat, data = brfss_2024_sim)
+
+
+# Simulate another cervical cancer screening outcome in simulated 2024 data, but do 72.9% outcome in banned states and keep 73.9% in accessible states (aka 1% change)
+set.seed(872)
+brfss_2024_sim$outcome_3 <- ifelse(brfss_2024_sim$postdobbs_cat == "Accessible",
+                                   sample(c(1, 0), size = sum(brfss_2024_sim$postdobbs_cat == "Accessible"), replace = TRUE, prob = c(0.739, 0.261)),
+                                   sample(c(1, 0), size = sum(brfss_2024_sim$postdobbs_cat == "Banned"),     replace = TRUE, prob = c(0.729, 0.271)))
+
+table1(~ factor(outcome_3) | postdobbs_cat, data = brfss_2024_sim)
+
+
+### Combine 2024 simulated dataset with 2016-2022 dataset 
+names(brfss_2024_sim)
+names(brfss_anal)
+
+brfss_2024_sim <- brfss_2024_sim %>% select("state_name", "postdobbs_cat", "_PSU", "year_brfss", "outcome", "outcome_2", "outcome_3")
+brfss_anal_sim <- rbind(brfss_anal, brfss_2024_sim)
+
+# Check final distributions for combined real and simulated dataset 
+table(brfss_anal_sim$state_name, brfss_anal_sim$postdobbs_cat, useNA = "always") 
+table(brfss_anal_sim$postdobbs_cat, useNA = "always")
+prop.table(table(brfss_anal_sim$postdobbs_cat, useNA = "always"))
+
+
+# Indicator of whether the state is in the "Banned" category, and if it is Pre or Post Dobbs 
+brfss_anal_sim <- brfss_anal_sim %>% 
+  mutate(dobbs_pre0post1 = case_when(year_brfss <= 2022 ~ 0, TRUE ~ 1), 
+         dobbs_acc0ban1  = case_when(postdobbs_cat == "Accessible" ~ 0, TRUE ~ 1))
+
+table(brfss_anal_sim$year_brfss, brfss_anal_sim$dobbs_pre0post1, useNA = "always")
+table(brfss_anal_sim$dobbs_acc0ban1, brfss_anal_sim$postdobbs_cat, useNA = "always")
+table(brfss_anal_sim$dobbs_pre0post1, brfss_anal_sim$dobbs_acc0ban1, 
+      dnn = c("Pre_0/Post_1 Dobbs", "Accessible_0/Banned_1"))
+
+
+```
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### RUN SIMULATION POWER CALCULATION 
+# 5% difference 
+model_5percent <- glmer(outcome ~ dobbs_pre0post1 * dobbs_acc0ban1 + (1 | dobbs_pre0post1:dobbs_acc0ban1), 
+                        data = brfss_anal_sim, family = binomial(link = "log"))
+
+model <- glm(outcome ~ dobbs_pre0post1 * dobbs_acc0ban1, data = brfss_anal_sim, family = binomial)
+summary(model)
+
+power_sim_5percent <- powerSim(model_5percent, nsim = 50, test = fixed("dobbs_pre0post1:dobbs_acc0ban1"))
+power_sim_5percent
+
+
+# 3% difference
+model_3percent <- glmer(outcome_2 ~ dobbs_pre0post1 * dobbs_acc0ban1 + (1 | dobbs_pre0post1:dobbs_acc0ban1), 
+                        data = brfss_anal_sim, family = binomial(link = "log"))
+
+model <- glm(outcome_2 ~ dobbs_pre0post1 * dobbs_acc0ban1, data = brfss_anal_sim, family = binomial)
+summary(model)
+
+power_sim_3percent <- powerSim(model_3percent, nsim = 50, test = fixed("dobbs_pre0post1:dobbs_acc0ban1"))
+power_sim_3percent
+
+
+# 1% difference 
+model_1percent <- glmer(outcome_3 ~ dobbs_pre0post1 * dobbs_acc0ban1 + (1 | dobbs_pre0post1:dobbs_acc0ban1), 
+                        data = brfss_anal_sim, family = binomial(link = "log"))
+
+model <- glm(outcome_3 ~ dobbs_pre0post1 * dobbs_acc0ban1, data = brfss_anal_sim, family = binomial)
+summary(model)
+
+power_sim_1percent <- powerSim(model_1percent, nsim = 10, test = fixed("dobbs_pre0post1:dobbs_acc0ban1"))
+power_sim_1percent
+
+
+```

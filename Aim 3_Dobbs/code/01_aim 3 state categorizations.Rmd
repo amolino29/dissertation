@@ -1,0 +1,174 @@
+---
+title: "01_aim 3 state categorizations"
+author: "Andrea Molino"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+This Rmarkdown file is to create a figure with the categorizations of the states in Aim 3 based on Medicaid history and pre vs. post Dobbs abortion status. The final 
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+
+library(crosstable)
+library(gmodels)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(table1)
+library(tibble)
+library(purrr)
+library(labelled)
+library(grid)
+library(gridExtra)
+library(readxl)
+library(tigris)
+
+
+# Read in excel of states with their Medicaid expansion status and abortion access information
+data_states <- read_excel("C:/Users/amoli/OneDrive - UW/Dissertation/Aim 3_Dobbs/State categorizations/List of States with Medicaid and Abortion access.xlsx")
+
+
+# Drop rows where states are missing 
+data_states <- data_states %>% drop_na(State)
+
+
+# Create new variables with state abbreviations 
+data_states <- data_states %>% 
+       mutate(state_abbrev = case_when(State == "Alabama" ~ "AL", 
+                                      State == "Alaska" ~ "AK", 
+                                      State == "Arizona" ~ "AZ", 
+                                      State == "Arkansas" ~ "AR", 
+                                      State == "California" ~ "CA", 
+                                      State == "Colorado" ~ "CO", 
+                                      State == "Connecticut" ~ "CT", 
+                                      State == "Delaware" ~ "DE", 
+                                      State == "Florida" ~ "FL", 
+                                      State == "Georgia" ~ "GA", 
+                                      State == "Hawaii" ~ "HI", 
+                                      State == "Idaho" ~ "ID", 
+                                      State == "Illinois" ~ "IL", 
+                                      State == "Indiana" ~ "IN", 
+                                      State == "Iowa" ~ "IA", 
+                                      State == "Kansas" ~ "KS", 
+                                      State == "Kentucky" ~ "KY", 
+                                      State == "Louisiana" ~ "LA", 
+                                      State == "Maine" ~ "ME", 
+                                      State == "Maryland" ~ "MD", 
+                                      State == "Massachusetts" ~ "MA", 
+                                      State == "Michigan" ~ "MI", 
+                                      State == "Minnesota" ~ "MN", 
+                                      State == "Mississippi" ~ "MS", 
+                                      State == "Missouri" ~ "MO", 
+                                      State == "Montana" ~ "MT", 
+                                      State == "Nebraska" ~ "NE", 
+                                      State == "Nevada" ~ "NV", 
+                                      State == "New Hampshire" ~ "NH", 
+                                      State == "New Jersey" ~ "NJ", 
+                                      State == "New Mexico" ~ "NM", 
+                                      State == "New York" ~ "NY", 
+                                      State == "North Carolina" ~ "NC", 
+                                      State == "North Dakota" ~ "ND", 
+                                      State == "Ohio" ~ "OH", 
+                                      State == "Oklahoma" ~ "OK", 
+                                      State == "Oregon" ~ "OR", 
+                                      State == "Pennsylvania" ~ "PA", 
+                                      State == "Rhode Island" ~ "RI", 
+                                      State == "South Carolina" ~ "SC", 
+                                      State == "South Dakota" ~ "SD", 
+                                      State == "Tennessee" ~ "TN", 
+                                      State == "Texas" ~ "TX", 
+                                      State == "Utah" ~ "UT", 
+                                      State == "Vermont" ~ "VT", 
+                                      State == "Virginia" ~ "VA", 
+                                      State == "Washington" ~ "WA", 
+                                      State == "West Virginia" ~ "WV", 
+                                      State == "Wisconsin" ~ "WI", 
+                                      State == "Wyoming" ~ "WY", 
+                                      State == "DC" ~ "DC",
+                                      TRUE ~ "AAAAAAAA"))
+
+
+# Collapse categorizations for figure 
+table(data_states$`Final Categorization`)
+
+data_states <- data_states %>% 
+  mutate(analysis_cat = case_when(`Final Categorization` == "Accessible"                ~ "No change", 
+                                  `Final Categorization` == "Banned"                    ~ "Abortion fully banned",
+                                  `Final Categorization` %in% c("Excluded","Ambiguous") ~ "Excluded"))
+
+table(data_states$analysis_cat, data_states$`Final Categorization`)
+table(data_states$analysis_cat)
+data_states_min <- data_states %>% select(State, state_abbrev, analysis_cat) 
+
+
+
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, include=FALSE}
+# Create figure using tigris package
+states_shape <- states(cb = TRUE)
+states_shape_join <- left_join(states_shape, data_states_min, by = c("STUSPS" = "state_abbrev")) %>% arrange(NAME)
+
+
+# Exclude if NA for category 
+states_shape_join <- states_shape_join %>% filter(!is.na(analysis_cat))
+states_shape_join <- shift_geometry(states_shape_join)
+states_shape_join$analysis_cat <- factor(states_shape_join$analysis_cat, 
+                                         levels = c("No change", "Abortion fully banned", "Excluded"))
+
+state_categories_map <- 
+      ggplot(data = states_shape_join) +
+        geom_sf(aes(fill = analysis_cat), color = "gray35") +
+        theme_minimal() +
+        scale_fill_manual(values = c("#009E73","#D55E00","gray70")) + 
+        # labs(fill = "Category") + 
+        theme(axis.line = element_blank(),
+              axis.text = element_blank(),
+              axis.ticks = element_blank(),
+              axis.title = element_blank(),
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              legend.position = "right",
+              legend.title = element_blank())
+
+state_categories_map_bottom <- 
+      ggplot(data = states_shape_join) +
+        geom_sf(aes(fill = analysis_cat), color = "gray35") +
+        theme_minimal() +
+        scale_fill_manual(values = c("#009E73","#D55E00","gray70")) + 
+        # labs(fill = "Category") + 
+        theme(axis.line = element_blank(),
+              axis.text = element_blank(),
+              legend.text = element_text(size=15), 
+              axis.ticks = element_blank(),
+              axis.title = element_blank(),
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              legend.position = "bottom",
+              legend.title = element_blank())
+
+print(state_categories_map)
+print(state_categories_map_bottom)
+
+
+# Export figures
+ggsave(file="../figures/figures_state categorizations/state_categories_map.pdf", plot=state_categories_map, width=8, height=4.75)
+ggsave(file="../figures/figures_state categorizations/state_categories_map.png", plot=state_categories_map, width=8, height=4.75)
+
+ggsave(file="../figures/figures_state categorizations/state_categories_map_bottom.pdf", plot=state_categories_map_bottom, width=8, height=4.75)
+ggsave(file="../figures/figures_state categorizations/state_categories_map_bottom.png", plot=state_categories_map_bottom, width=8, height=4.75)
+
+```
+
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+
+
+```

@@ -1,0 +1,317 @@
+---
+title: "03_restrict to appropriate BRFSS population and variables"
+author: "Andrea Molino"
+date: "2024-12-24"
+output: html_document
+---
+
+This file **restricts to the population of interest for my Aim 3 using BRFSS data**, specifically females living in our designated states of interest, between 30-49 years of age (eligible for HPV self-sampling and of reproductive age), without a hysterectomy and without a history of cervical cancer screening (as this population would not be on a regular screening schedule). 
+
+It also pulls in the variables of interest and formats them correctly and accordingly. If additional variables need to be pulled in or investigated/reformatted, that should be done in this Rmarkdown. 
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+
+### Run state other Rmarkdown to set up this file
+rmarkdown::render("02_pull in BRFSS data for aim 3.Rmd")
+
+```
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### RESTRICT DOWN TO POPULATION OF INTEREST
+
+### RESTRICTION: only keep states of interest, i.e., abortion accessible or abortion not accessible post Dobbs
+brfss_name_states <- function(data) {
+  data %>%
+    mutate(state_name = case_when(`_STATE` == "01" ~ "Alabama",
+                                  `_STATE` == "02" ~ "Alaska",
+                                  `_STATE` == "04" ~ "Arizona",
+                                  `_STATE` == "05" ~ "Arkansas",
+                                  `_STATE` == "06" ~ "California",
+                                  `_STATE` == "08" ~ "Colorado",
+                                  `_STATE` == "09" ~ "Connecticut",
+                                  `_STATE` == "10" ~ "Delaware",
+                                  `_STATE` == "11" ~ "DC",
+                                  `_STATE` == "12" ~ "Florida",
+                                  `_STATE` == "13" ~ "Georgia",
+                                  `_STATE` == "15" ~ "Hawaii",
+                                  `_STATE` == "16" ~ "Idaho",
+                                  `_STATE` == "17" ~ "Illinois",
+                                  `_STATE` == "18" ~ "Indiana",
+                                  `_STATE` == "19" ~ "Iowa",
+                                  `_STATE` == "20" ~ "Kansas",
+                                  `_STATE` == "21" ~ "Kentucky",
+                                  `_STATE` == "22" ~ "Louisiana",
+                                  `_STATE` == "23" ~ "Maine",
+                                  `_STATE` == "24" ~ "Maryland",
+                                  `_STATE` == "25" ~ "Massachusetts",
+                                  `_STATE` == "26" ~ "Michigan",
+                                  `_STATE` == "27" ~ "Minnesota",
+                                  `_STATE` == "28" ~ "Mississippi",
+                                  `_STATE` == "29" ~ "Missouri",
+                                  `_STATE` == "30" ~ "Montana",
+                                  `_STATE` == "31" ~ "Nebraska",
+                                  `_STATE` == "32" ~ "Nevada",
+                                  `_STATE` == "33" ~ "New Hampshire",
+                                  `_STATE` == "34" ~ "New Jersey",
+                                  `_STATE` == "35" ~ "New Mexico",
+                                  `_STATE` == "36" ~ "New York",
+                                  `_STATE` == "37" ~ "North Carolina",
+                                  `_STATE` == "38" ~ "North Dakota",
+                                  `_STATE` == "39" ~ "Ohio",
+                                  `_STATE` == "40" ~ "Oklahoma",
+                                  `_STATE` == "41" ~ "Oregon",
+                                  `_STATE` == "42" ~ "Pennsylvania",
+                                  `_STATE` == "44" ~ "Rhode Island",
+                                  `_STATE` == "45" ~ "South Carolina",
+                                  `_STATE` == "46" ~ "South Dakota",
+                                  `_STATE` == "47" ~ "Tennessee",
+                                  `_STATE` == "48" ~ "Texas",
+                                  `_STATE` == "49" ~ "Utah",
+                                  `_STATE` == "50" ~ "Vermont",
+                                  `_STATE` == "51" ~ "Virginia",
+                                  `_STATE` == "53" ~ "Washington",
+                                  `_STATE` == "54" ~ "West Virginia",
+                                  `_STATE` == "55" ~ "Wisconsin",
+                                  `_STATE` == "56" ~ "Wyoming",
+                                  `_STATE` == "66" ~ "Guam",
+                                  `_STATE` == "72" ~ "Puerto Rico",
+                                  `_STATE` == "78" ~ "Virgin Islands"))
+}
+
+brfss_datasets <- list(brfss_2022, brfss_2020, brfss_2018, brfss_2016)
+transformed_datasets <- lapply(brfss_datasets, brfss_name_states)
+
+# Assign back to original variables if needed
+brfss_2022 <- transformed_datasets[[1]]
+brfss_2020 <- transformed_datasets[[2]]
+brfss_2018 <- transformed_datasets[[3]]
+brfss_2016 <- transformed_datasets[[4]]
+
+# Merge in state categorizations 
+brfss_2022 <- brfss_2022 %>% left_join(data_states %>% select(State, `Final Categorization`), by = c("state_name" = "State"))
+brfss_2020 <- brfss_2020 %>% left_join(data_states %>% select(State, `Final Categorization`), by = c("state_name" = "State"))
+brfss_2018 <- brfss_2018 %>% left_join(data_states %>% select(State, `Final Categorization`), by = c("state_name" = "State"))
+brfss_2016 <- brfss_2016 %>% left_join(data_states %>% select(State, `Final Categorization`), by = c("state_name" = "State"))
+
+# Rename Final Categorization for easier usage 
+brfss_2022 <- brfss_2022 %>% rename(postdobbs_cat = `Final Categorization`)
+brfss_2020 <- brfss_2020 %>% rename(postdobbs_cat = `Final Categorization`)
+brfss_2018 <- brfss_2018 %>% rename(postdobbs_cat = `Final Categorization`)
+brfss_2016 <- brfss_2016 %>% rename(postdobbs_cat = `Final Categorization`)
+
+# Only keep states in the "Accessible" and "Banned" categories 
+brfss_2022 <- brfss_2022 %>% filter(postdobbs_cat %in% c("Accessible", "Banned"))
+brfss_2020 <- brfss_2020 %>% filter(postdobbs_cat %in% c("Accessible", "Banned"))
+brfss_2018 <- brfss_2018 %>% filter(postdobbs_cat %in% c("Accessible", "Banned"))
+brfss_2016 <- brfss_2016 %>% filter(postdobbs_cat %in% c("Accessible", "Banned"))
+
+
+### RESTRICTION: keep those between the ages of 30-49 years 
+table(brfss_2022$`_AGEG5YR`, useNA = "always")
+table(brfss_2020$`_AGEG5YR`, useNA = "always")
+table(brfss_2018$`_AGEG5YR`, useNA = "always")
+table(brfss_2016$`_AGEG5YR`, useNA = "always")
+
+brfss_2022 <- brfss_2022 %>% filter(`_AGEG5YR` %in% c("03", "04", "05", "06"))
+brfss_2020 <- brfss_2020 %>% filter(`_AGEG5YR` %in% c("03", "04", "05", "06"))
+brfss_2018 <- brfss_2018 %>% filter(`_AGEG5YR` %in% c("03", "04", "05", "06"))
+brfss_2016 <- brfss_2016 %>% filter(`_AGEG5YR` %in% c("03", "04", "05", "06"))
+
+
+### RESTRICTION: only keep females 
+# BRFSS sex variables have changed over time, and will need to dig in at some point. But for 2022 and 2020, it's _SEX, for 2018 it's SEX1, and for 2016 it's SEX. 2 is always female 
+brfss_2022 <- brfss_2022 %>% rename(sex = `_SEX`)
+brfss_2020 <- brfss_2020 %>% rename(sex = `_SEX`)
+brfss_2018 <- brfss_2018 %>% rename(sex = SEX1)
+brfss_2016 <- brfss_2016 %>% rename(sex = SEX)
+
+table(brfss_2022$sex, useNA = "always")
+table(brfss_2020$sex, useNA = "always")
+table(brfss_2018$sex, useNA = "always")
+table(brfss_2016$sex, useNA = "always")
+
+brfss_2022 <- brfss_2022 %>% filter(sex==2)
+brfss_2020 <- brfss_2020 %>% filter(sex==2)
+brfss_2018 <- brfss_2018 %>% filter(sex==2)
+brfss_2016 <- brfss_2016 %>% filter(sex==2)
+
+
+### RESTRICTION: drop those who say YES I have had a hysterectomy --> also need to delve into this variable a bit more 
+table(brfss_2022$HADHYST2, useNA = "always")
+table(brfss_2020$HADHYST2, useNA = "always")
+table(brfss_2018$HADHYST2, useNA = "always")
+table(brfss_2016$HADHYST2, useNA = "always")
+
+brfss_2022 <- brfss_2022 %>% filter(is.na(HADHYST2) | HADHYST2 != 1)
+brfss_2020 <- brfss_2020 %>% filter(is.na(HADHYST2) | HADHYST2 != 1)
+brfss_2018 <- brfss_2018 %>% filter(is.na(HADHYST2) | HADHYST2 != 1)
+brfss_2016 <- brfss_2016 %>% filter(is.na(HADHYST2) | HADHYST2 != 1)
+
+
+### RESTRICTION: drop those who have a history of cervical cancer 
+# For 2016 through 2020, 02 == cervical cancer, but for 2022, the variable changed and 06 == cervical cancer
+table(brfss_2022$CNCRTYP2, useNA = "always")
+table(brfss_2020$CNCRTYP1, useNA = "always")
+table(brfss_2018$CNCRTYP1, useNA = "always")
+table(brfss_2016$CNCRTYP1, useNA = "always")
+
+brfss_2022 <- brfss_2022 %>% filter(is.na(CNCRTYP2) | CNCRTYP2 != "06")
+brfss_2020 <- brfss_2020 %>% filter(is.na(CNCRTYP1) | CNCRTYP1 != "02")
+brfss_2018 <- brfss_2018 %>% filter(is.na(CNCRTYP1) | CNCRTYP1 != "02")
+brfss_2016 <- brfss_2016 %>% filter(is.na(CNCRTYP1) | CNCRTYP1 != "02")
+
+
+```
+
+The below section pulls in the variables as needed for this analysis. More variables will be pulled in as needed. 
+
+Most of the variables remain the same or very very similar, but some variables have changed a bit over the years. The nuances are listed below: 
+
+* Race: for the race variable in the BRFSS, in 2022, the category of "Other race only, Non-Hispanic" was removed, and thus there is no "6" for that population. This means that you can only be categorized as "other race only" if the data came from 2016, 2018, or 2020. Overall, this was a low percentage in those few years (<1% for each year). 
+* Insurance: Unfortunately, health insurance in 2016, 2018, and 2020 were VERY sparsely collected. My hope is that the 2024 data collection on this variable will be good and I can do a 2022-2024 DID analysis with the focus being health insurance. But unfortunately, I cannot do this for the years I currently have.
+* Urban/rural status: in 2018, 2020 and 2022, there are 3 urban/rural type variables. The first is `_METSTAT`, which gives the "metropolitan status" or the county. The second is `_URBSTAT`, which tells us if the county is urban or rural (this one is more specific on the "rural" categorization, fewer counties are defined as rural). These first two variables are based on `_URBNRRL`, which I cannot find in any of these data files. Finally there is `MSCODE`, which tells us if the individual lives in the center city of an MSA, outside of the center city but still inside the county containing an MSA, inside a suburban county of an MSA, or outside of an MSA. Unfortunately, 2016 solely has the `MSCODE` variable. Thus, some of the urban/rural robustness checks can only be done for 3 of the years. 
+* Variables needed for cervical cancer screening compliance: 
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### CREATE ANALYTICAL DATASET: pull in the variables of interest 
+
+# 2022
+brfss_2022_final <- brfss_2022 %>% 
+  select(state_name, postdobbs_cat, `_PSU`, IMONTH, IDAY, IYEAR, DISPCODE,
+         `_AGEG5YR`, sex, `_RACE1`, 
+         # PRIMINSR, 
+         `_METSTAT`, `_URBSTAT`, MSCODE, `_EDUCAG`, 
+         CERVSCRN, CRVCLCNC, CRVCLPAP, CRVCLHPV) 
+
+# 2020 
+brfss_2020_final <- brfss_2020 %>% 
+  select(state_name, postdobbs_cat, `_PSU`, IMONTH, IDAY, IYEAR, DISPCODE,
+         `_AGEG5YR`, sex, `_RACE`, 
+         # HLTHCVR1, 
+         `_METSTAT`, `_URBSTAT`, MSCODE, `_EDUCAG`, 
+         HADPAP2, LASTPAP2, HPVTEST, HPLSTTST)
+
+# 2018
+brfss_2018_final <- brfss_2018 %>% 
+  select(state_name, postdobbs_cat, `_PSU`, IMONTH, IDAY, IYEAR, DISPCODE,
+         `_AGEG5YR`, sex, `_RACE`, 
+         # HLTHCVR1, 
+         `_METSTAT`, `_URBSTAT`, MSCODE, `_EDUCAG`, 
+         HADPAP2, LASTPAP2, HPVTEST, HPLSTTST)
+
+# 2016
+brfss_2016_final <- brfss_2016 %>% 
+  select(state_name, postdobbs_cat, `_PSU`, IMONTH, IDAY, IYEAR, DISPCODE,
+         `_AGEG5YR`, sex, `_RACE`, 
+         # HLTHCVR1, 
+         MSCODE, `_EDUCAG`)
+
+
+```
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### Race variable rename 
+# 2022 
+brfss_2022_final <- brfss_2022_final %>% rename(`_RACE` = `_RACE1`)
+
+
+```
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### Create cervical cancer compliance variables
+
+# 2022 
+brfss_2022_final <- brfss_2022_final %>% 
+  mutate(ccs_cmplnt = case_when(
+    CERVSCRN == 2 ~ "Noncompliant", 
+    CRVCLCNC == 5 ~ "Noncompliant", 
+    (CERVSCRN == 1 & CRVCLCNC %in% c(1,2,3)) & (CRVCLPAP == 1 | CRVCLHPV == 1) ~ "Compliant", 
+    (CERVSCRN == 1 & CRVCLCNC %in% c(1,2,3)) & (CRVCLPAP == 2 & CRVCLHPV == 2) ~ "Noncompliant", 
+    (CERVSCRN == 1 & CRVCLCNC %in% c(4)) & (CRVCLHPV == 1) ~ "Compliant", 
+    (CERVSCRN == 1 & CRVCLCNC %in% c(4)) & (CRVCLHPV == 2) ~ "Noncompliant",
+    TRUE ~ NA
+  ))
+
+# 2020 
+brfss_2020_final <- brfss_2020_final %>% 
+  mutate(pap_cmplnt = case_when(
+    HADPAP2 == 2 ~ "Noncompliant",
+    HADPAP2 == 1 & LASTPAP2 %in% c(1,2,3) ~ "Compliant", 
+    HADPAP2 == 1 & LASTPAP2 %in% c(4,5) ~ "Noncompliant", 
+    TRUE ~ NA
+  ))
+  
+brfss_2020_final <- brfss_2020_final %>% 
+  mutate(hpv_cmplnt = case_when(
+    HPVTEST == 2 ~ "Noncompliant", 
+    HPVTEST == 1 & HPLSTTST %in% c(1,2,3,4) ~ "Compliant",
+    HPVTEST == 1 & HPLSTTST %in% c(5) ~ "Noncompliant",
+    TRUE ~ NA
+  ))
+
+brfss_2020_final <- brfss_2020_final %>% 
+  mutate(ccs_cmplnt = case_when(
+    pap_cmplnt == "Noncompliant" & hpv_cmplnt == "Noncompliant" ~ "Noncompliant",
+    pap_cmplnt == "Compliant" | hpv_cmplnt == "Compliant" ~ "Compliant",
+    TRUE ~ NA
+  ))
+
+brfss_2020_final <- brfss_2020_final %>% select(-pap_cmplnt, -hpv_cmplnt)
+
+# 2018 
+brfss_2018_final <- brfss_2018_final %>% 
+  mutate(pap_cmplnt = case_when(
+    HADPAP2 == 2 ~ "Noncompliant",
+    HADPAP2 == 1 & LASTPAP2 %in% c(1,2,3) ~ "Compliant", 
+    HADPAP2 == 1 & LASTPAP2 %in% c(4,5) ~ "Noncompliant", 
+    TRUE ~ NA
+  ))
+  
+brfss_2018_final <- brfss_2018_final %>% 
+  mutate(hpv_cmplnt = case_when(
+    HPVTEST == 2 ~ "Noncompliant", 
+    HPVTEST == 1 & HPLSTTST %in% c(1,2,3,4) ~ "Compliant",
+    HPVTEST == 1 & HPLSTTST %in% c(5) ~ "Noncompliant",
+    TRUE ~ NA
+  ))
+
+brfss_2018_final <- brfss_2018_final %>% 
+  mutate(ccs_cmplnt = case_when(
+    pap_cmplnt == "Noncompliant" & hpv_cmplnt == "Noncompliant" ~ "Noncompliant",
+    pap_cmplnt == "Compliant" | hpv_cmplnt == "Compliant" ~ "Compliant",
+    TRUE ~ NA
+  ))
+
+brfss_2018_final <- brfss_2018_final %>% select(-pap_cmplnt, -hpv_cmplnt)
+
+
+
+```
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### COMBINE DATASETS
+# First, rbind 2018 and 2020 since they have the same set of variables 
+brfss_final <- rbind(brfss_2018_final, brfss_2020_final)
+
+# Now add in 2022, but because 2022 vs. 2018 & 2020 have different variables for CC screening, need to account for those 
+all_columns <- union(colnames(brfss_final), colnames(brfss_2022_final))
+
+# Ensure all variables are in BOTH datasets, and create and set NA's for all variables that do not exist presently 
+for (col in setdiff(all_columns, colnames(brfss_final))) {
+  brfss_final[[col]] <- NA
+}
+
+for (col in setdiff(all_columns, colnames(brfss_2022_final))) {
+  brfss_2022_final[[col]] <- NA
+}
+
+# Now rbind 2018/2020 with 2022
+brfss_final <- rbind(brfss_final, brfss_2022_final)
+
+
+```

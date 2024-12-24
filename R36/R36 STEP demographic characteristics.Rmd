@@ -1,0 +1,162 @@
+---
+title: "Characteristics of STEP for R36"
+author: "Andrea Molino"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: cosmo
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+This first section calculates the overall STEP participant characteristics for my R36 resubmission. 
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(table1)
+
+n_due     <- 12928
+n_overdue <- 8279
+n_unknown <- 9942
+n_total   <- n_due + n_overdue + n_unknown
+
+prop_due     <- n_due / n_total
+prop_overdue <- n_overdue / n_total
+prop_unknown <- n_unknown / n_total
+prop_total   <- prop_due + prop_overdue + prop_unknown    # just did this to verify, must be 1 
+
+print(prop_due*100)
+print(prop_overdue*100)
+print(prop_unknown*100)
+
+
+```
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### Age
+# Although mean age is calculated in the STEP paper, it's stratified by CC history status, and want 1 unifying age mean 
+ageweigh_due     <- prop_due * 46.5 
+ageweigh_overdue <- prop_overdue * 47.4
+ageweigh_unknown <- prop_unknown * 43.8
+age_mean         <- ageweigh_due + ageweigh_overdue + ageweigh_unknown
+
+print(age_mean)
+
+```
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### Race
+race_total <- 12307 + 7104 + 5959
+
+prop_asian     <- (1521 + 816 + 1067)/race_total
+prop_black     <- (600 + 370 + 442)/race_total
+prop_morethan1 <- (453 + 278 + 183)/race_total
+prop_white     <- (9039 + 5230 + 3828)/race_total
+
+prop_asian*100
+prop_black*100
+prop_morethan1*100
+prop_white*100
+
+# WA proportions 2022: https://ofm.wa.gov/washington-data-research/statewide-data/washington-trends/population-changes/population-race
+prop_asian_WA     <- 808748/7864400
+prop_black_WA     <- 352936/7864400
+prop_morethan1_WA <- 786160/7864400
+prop_white_WA     <- 5658184/786440
+
+prop_asian_WA*100
+prop_black_WA*100
+prop_morethan1_WA*100
+prop_white_WA*100
+
+```
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### Ethnicity 
+ethnic_total <- 11994 + 6473 + 3316
+prop_hisp <- (846 + 401 + 458)/ethnic_total
+prop_hisp*100
+
+# WA proportions 2022: https://ofm.wa.gov/washington-data-research/statewide-data/washington-trends/population-changes/population-hispaniclatino-origin
+prop_hisp_WA <- 0.145
+
+
+```
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### BMI 
+# Percentage with BMI 30 or above
+bmi_total  <- 12298 + 5527 + 4256
+prop_obese <- (2259 + 1131 + 828 + 1269 + 716 + 530+ 1276 + 800 + 588)/bmi_total
+prop_obese*100
+
+```
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### Comorbidity index 
+# Percentage with 1 or more on the comorbidity scale 
+comorb_total   <- 10752 + 7269 + 9155 + 1925 + 852 + 686 + 157 + 103 + 63 + 94 + 55 + 38
+prop_comorbgt1 <- (1925 + 852 + 686 + 157 + 103 + 63 + 94 + 55 + 38)/comorb_total
+prop_comorbgt1*100
+
+
+```
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### Travel time 
+# Percentage that travel 30 minutes or more to clinic 
+travel_total <- 12924 + 8277 + 9940
+prop_travelgt30 <- (1989 + 1297 + 1286)/travel_total
+prop_travelgt30*100
+
+
+```
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### SVI 
+# Percentage in the most vulerable population 
+SVI_total    <- 4185 + 2467 + 2642 + 3862 + 2550 + 2903 + 3133 + 2036 + 2536 + 1748 + 1226 + 1861 
+prop_SVIhigh <- (1748 + 1226 + 1861)/SVI_total
+prop_SVIhigh*100
+
+
+```
+
+
+This second section estimates the number of participants in each of the analyses for Aim 2, specifically HbA1c, mammogram, and colorectal cancer screening, as these will be sub-populations as not everyon needs testing for diabetes or is eligible for the other cancer screenings based on age. These values are estimated based on the Kariya paper, taking the percentage in each analysis from that analysis and applying it to the total number of participants in the STEP study who were CC screening adherent (i.e., my Aim 2 population). 
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### HbA1C
+n_home     <- 14218
+
+n_hba1c_aim2 <- (1036/n_home)*n_due
+n_mamm_aim2  <- (3500/n_home)*n_due
+n_crc_aim2   <- (4482/n_home)*n_due
+
+print(n_hba1c_aim2)
+print(n_mamm_aim2)
+print(n_crc_aim2)
+
+
+```
+
+
+
+
+
+
+
+
