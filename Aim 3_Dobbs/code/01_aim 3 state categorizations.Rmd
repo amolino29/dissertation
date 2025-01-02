@@ -2,10 +2,7 @@
 title: "01_aim 3 state categorizations"
 author: "Andrea Molino"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
-output:
-  html_document:
-    df_print: paged
-  pdf_document: default
+output: html_document
 ---
 
 This Rmarkdown file is to create a figure with the categorizations of the states in Aim 3 based on Medicaid history and pre vs. post Dobbs abortion status. The final 
@@ -172,3 +169,5 @@ ggsave(file="../figures/figures_state categorizations/state_categories_map_botto
 
 
 ```
+
+

@@ -1,7 +1,7 @@
 ---
 title: "03_restrict to appropriate BRFSS population and variables"
 author: "Andrea Molino"
-date: "2024-12-24"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
 output: html_document
 ---
 
@@ -9,13 +9,18 @@ This file **restricts to the population of interest for my Aim 3 using BRFSS dat
 
 It also pulls in the variables of interest and formats them correctly and accordingly. If additional variables need to be pulled in or investigated/reformatted, that should be done in this Rmarkdown. 
 
+***AS OF DECEMBER 2024 this file does NOT consolidate 2016 data, as there are some additional considerations for using these data, specifically related to the guidelines in 2016. I'm wanting to talk to Rachel a bit more about this before I incorporate. It also does not pull in 2024 data, as 2024 BRFSS data does not exist yet.***
+
 
 ```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
-rm(list=ls())
-knitr::opts_chunk$set(echo = TRUE)
+# rm(list=ls())
+# knitr::opts_chunk$set(echo = TRUE)
 
+### STILL TRYING TO FIGURE OUT HOW TO GET THIS RENDERING CODE TO WORK WITHOUT ERRORS
 ### Run state other Rmarkdown to set up this file
-rmarkdown::render("02_pull in BRFSS data for aim 3.Rmd")
+# rmarkdown::render("02_pull in BRFSS data for aim 3.Rmd")
+
+library(lubridate)
 
 ```
 
@@ -164,50 +169,63 @@ brfss_2018 <- brfss_2018 %>% filter(is.na(CNCRTYP1) | CNCRTYP1 != "02")
 brfss_2016 <- brfss_2016 %>% filter(is.na(CNCRTYP1) | CNCRTYP1 != "02")
 
 
+### RESTRICTION: drop those who say they are currently pregnant
+table(brfss_2022$PREGNANT, useNA = "always")
+table(brfss_2020$PREGNANT, useNA = "always")
+table(brfss_2018$PREGNANT, useNA = "always")
+table(brfss_2016$PREGNANT, useNA = "always")
+
+brfss_2022 <- brfss_2022 %>% filter(PREGNANT!=1 | is.na(PREGNANT))
+brfss_2020 <- brfss_2020 %>% filter(PREGNANT!=1 | is.na(PREGNANT))
+brfss_2018 <- brfss_2018 %>% filter(PREGNANT!=1 | is.na(PREGNANT))
+brfss_2016 <- brfss_2016 %>% filter(PREGNANT!=1 | is.na(PREGNANT))
+
+
 ```
 
 The below section pulls in the variables as needed for this analysis. More variables will be pulled in as needed. 
 
 Most of the variables remain the same or very very similar, but some variables have changed a bit over the years. The nuances are listed below: 
 
-* Race: for the race variable in the BRFSS, in 2022, the category of "Other race only, Non-Hispanic" was removed, and thus there is no "6" for that population. This means that you can only be categorized as "other race only" if the data came from 2016, 2018, or 2020. Overall, this was a low percentage in those few years (<1% for each year). 
-* Insurance: Unfortunately, health insurance in 2016, 2018, and 2020 were VERY sparsely collected. My hope is that the 2024 data collection on this variable will be good and I can do a 2022-2024 DID analysis with the focus being health insurance. But unfortunately, I cannot do this for the years I currently have.
-* Urban/rural status: in 2018, 2020 and 2022, there are 3 urban/rural type variables. The first is `_METSTAT`, which gives the "metropolitan status" or the county. The second is `_URBSTAT`, which tells us if the county is urban or rural (this one is more specific on the "rural" categorization, fewer counties are defined as rural). These first two variables are based on `_URBNRRL`, which I cannot find in any of these data files. Finally there is `MSCODE`, which tells us if the individual lives in the center city of an MSA, outside of the center city but still inside the county containing an MSA, inside a suburban county of an MSA, or outside of an MSA. Unfortunately, 2016 solely has the `MSCODE` variable. Thus, some of the urban/rural robustness checks can only be done for 3 of the years. 
-* Variables needed for cervical cancer screening compliance: 
+* *Race*: for the race variable in the BRFSS, in 2022, the category of "Other race only, Non-Hispanic" was removed, and thus there is no "6" for that population. This means that you can only be categorized as "other race only" if the data came from 2016, 2018, or 2020. Overall, this was a low percentage in those few years (<1% for each year). 
+* *Insurance*: Unfortunately, health insurance in 2016, 2018, and 2020 were VERY sparsely collected. My hope is that the 2024 data collection on this variable will be good and I can do a 2022-2024 DID analysis with the focus being health insurance. But unfortunately, I cannot do this for the years I currently have.
+* *Urban/rural status*: in 2018, 2020 and 2022, there are 3 urban/rural type variables. The first is `_METSTAT`, which gives the "metropolitan status" or the county. The second is `_URBSTAT`, which tells us if the county is urban or rural (this one is more specific on the "rural" categorization, fewer counties are defined as rural). These first two variables are based on `_URBNRRL`, which I cannot find in any of these data files. Finally there is `MSCODE`, which tells us if the individual lives in the center city of an MSA, outside of the center city but still inside the county containing an MSA, inside a suburban county of an MSA, or outside of an MSA. Unfortunately, 2016 solely has the `MSCODE` variable. Thus, some of the urban/rural robustness checks can only be done for 3 of the years. 
+* *Variables needed for cervical cancer screening compliance*: these variables vary depending on year (2022 vs. 2020/2018 same vs. 2016) so each year will need to pull in its own variables AND the cervical cancer screening compliant vs. noncompliant variable will be created independently for each year. At this time, 2018, 2020 and 2022 are completed, but 2016 has not been completed yet because the guidelines were different so I want to talk to Rachel a bit about it first. However, the 2016 questions are asked identically to the 2018 and 2020 questions and the variables are the same, so eventually the code will be able to be reused at least in part. 
 
 ```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
 ### CREATE ANALYTICAL DATASET: pull in the variables of interest 
 
 # 2022
 brfss_2022_final <- brfss_2022 %>% 
-  select(state_name, postdobbs_cat, `_PSU`, IMONTH, IDAY, IYEAR, DISPCODE,
-         `_AGEG5YR`, sex, `_RACE1`, 
+  select(state_name, postdobbs_cat, `_PSU`, `_LLCPWT`, IMONTH, IDAY, IYEAR, DISPCODE,
+         `_AGEG5YR`, sex, `_RACE1`,
          # PRIMINSR, 
          `_METSTAT`, `_URBSTAT`, MSCODE, `_EDUCAG`, 
          CERVSCRN, CRVCLCNC, CRVCLPAP, CRVCLHPV) 
 
 # 2020 
 brfss_2020_final <- brfss_2020 %>% 
-  select(state_name, postdobbs_cat, `_PSU`, IMONTH, IDAY, IYEAR, DISPCODE,
-         `_AGEG5YR`, sex, `_RACE`, 
+  select(state_name, postdobbs_cat, `_PSU`, `_LLCPWT`, IMONTH, IDAY, IYEAR, DISPCODE,
+         `_AGEG5YR`, sex, `_RACE`,
          # HLTHCVR1, 
          `_METSTAT`, `_URBSTAT`, MSCODE, `_EDUCAG`, 
          HADPAP2, LASTPAP2, HPVTEST, HPLSTTST)
 
 # 2018
 brfss_2018_final <- brfss_2018 %>% 
-  select(state_name, postdobbs_cat, `_PSU`, IMONTH, IDAY, IYEAR, DISPCODE,
-         `_AGEG5YR`, sex, `_RACE`, 
+  select(state_name, postdobbs_cat, `_PSU`, `_LLCPWT`, IMONTH, IDAY, IYEAR, DISPCODE,
+         `_AGEG5YR`, sex, `_RACE`,
          # HLTHCVR1, 
          `_METSTAT`, `_URBSTAT`, MSCODE, `_EDUCAG`, 
          HADPAP2, LASTPAP2, HPVTEST, HPLSTTST)
 
 # 2016
 brfss_2016_final <- brfss_2016 %>% 
-  select(state_name, postdobbs_cat, `_PSU`, IMONTH, IDAY, IYEAR, DISPCODE,
-         `_AGEG5YR`, sex, `_RACE`, 
+  select(state_name, postdobbs_cat, `_PSU`, `_LLCPWT`, IMONTH, IDAY, IYEAR, DISPCODE,
+         `_AGEG5YR`, sex, `_RACE`,
          # HLTHCVR1, 
-         MSCODE, `_EDUCAG`)
+         MSCODE, `_EDUCAG`,
+         HADPAP2, LASTPAP2, HPVTEST, HPLSTTST)
 
 
 ```
@@ -292,9 +310,26 @@ brfss_2018_final <- brfss_2018_final %>% select(-pap_cmplnt, -hpv_cmplnt)
 
 ```
 
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### Create a "year of BRFSS survey" variable 
+# 2022
+brfss_2022_final <- brfss_2022_final %>% mutate(year_brfss = 2022)
+
+# 2020
+brfss_2020_final <- brfss_2020_final %>% mutate(year_brfss = 2020)
+
+# 2018 
+brfss_2018_final <- brfss_2018_final %>% mutate(year_brfss = 2018)
+
+# 2016
+brfss_2016_final <- brfss_2016_final %>% mutate(year_brfss = 2016)
+
+
+```
+
 
 ```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
-### COMBINE DATASETS
+### COMBINE DATASETS AND CREATE ADDITIONAL RELEVANT VARIABLES 
 # First, rbind 2018 and 2020 since they have the same set of variables 
 brfss_final <- rbind(brfss_2018_final, brfss_2020_final)
 
@@ -314,4 +349,95 @@ for (col in setdiff(all_columns, colnames(brfss_2022_final))) {
 brfss_final <- rbind(brfss_final, brfss_2022_final)
 
 
+# Create a pre- vs. post-Dobbs variable 
+brfss_final <- brfss_final %>% 
+  mutate(pre0post1dobbs = case_when(
+    year_brfss <= 2022 ~ 0, 
+    year_brfss >  2022 ~ 1, 
+    TRUE ~ 99
+  ))
+
+table(brfss_final$IYEAR, brfss_final$year_brfss, useNA = "always", deparse.level = 2)
+
+
+# Create date of interview variable 
+brfss_final <- brfss_final %>% 
+  mutate(date_interview = as.Date(paste0(IYEAR, "-", IMONTH, "-", IDAY), "%Y-%m-%d"))
+
+
+### Label and rename variables 
+# Age
+brfss_final <- brfss_final %>% rename(age_cat = `_AGEG5YR`) 
+brfss_final$age_cat <- factor(brfss_final$age_cat, 
+                              levels = c("03", "04", "05", "06"), 
+                              labels = c("30-34", "35-39", "40-44", "45-49"))
+  
+table(brfss_final$age_cat, useNA = "always")
+
+brfss_final <- brfss_final %>% 
+  mutate(age_cat_collap = case_when(
+    age_cat %in% c("30-34", "35-39") ~ "30-39",  
+    age_cat %in% c("40-44", "45-49") ~ "40-49",
+    TRUE ~ NA
+  ))
+
+table(brfss_final$age_cat, brfss_final$age_cat_collap, useNA = "always")
+
+
+# Education
+brfss_final <- brfss_final %>% rename(edu_full = `_EDUCAG`)
+brfss_final$edu_full <- factor(brfss_final$edu_full, 
+                               levels = c("1", "2", "3", "4", "9"), 
+                               labels = c("Did not graduate HS", 
+                                          "Graduated HS", 
+                                          "Attended college or technical school",
+                                          "Graduated from college or technical school",
+                                          NA))
+
+brfss_final <- brfss_final %>% 
+  mutate(edu_collap = case_when(
+    edu_full %in% c("Did not graduate HS",
+                    "Graduated HS", 
+                    "Attended college or technical school") ~ "Did not graduate from college or technical school", 
+    edu_full %in% c("Graduated from college or technical school") ~ "Graduated from college or technical school", 
+    TRUE ~ NA
+  ))
+
+table(brfss_final$edu_full, brfss_final$edu_collap, useNA = "always")
+
+
+# Urban/rural status 
+brfss_final <- brfss_final %>% rename(urban1rural2 = `_URBSTAT`)
+brfss_final$urban1rural2 <- factor(brfss_final$urban1rural2, 
+                                   levels = c("1", "2"), 
+                                   labels = c("Urban county", "Rural county"))
+
+table(brfss_final$urban1rural2, useNA = "always")
+
+
+# Pre Dobbs passing variable 
+brfss_final <- brfss_final %>% 
+  mutate(prejune22_y1n0 = case_when(
+    date_interview < as.Date("2022-06-24") ~ 1, 
+    date_interview >= as.Date("2022-06-24") ~ 0, 
+    TRUE ~ NA
+  ))
+
+
+
 ```
+
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+### CREATE RDATA FILE FOR ANALYSIS
+save(brfss_final, file ="../data/brfss_final.RData")
+
+```
+
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+
+
+```
+
+
