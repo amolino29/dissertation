@@ -112,6 +112,15 @@ prop_comorbgt1*100
 
 ```
 
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### Tobacco use 
+# Percentage that are current or former tobacco users 
+tobacco_total <- 12322 + 5750 + 4687  
+prop_tobacco_currorform <- (738 + 688 + 620 + 2728 + 1217 + 777)/tobacco_total
+prop_tobacco_currorform*100
+
+
+```
 
 ```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
 ### Travel time 

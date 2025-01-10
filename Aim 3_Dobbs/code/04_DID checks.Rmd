@@ -189,28 +189,37 @@ For these checks, I am ONLY including those who have non-missing information on 
 I am first just plotting the change in cervical cancer screening compliance proportion over time comparing abortion banned vs. accessible states.  
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
-### Assessment of change in outcome over time comparing abortion banned vs. accessible states 
+### Assessment of change in outcome over time comparing abortion banned vs. accessible states, as well as overall change over time 
 prop_ccs_cmplnt_year <- 
   brfss_final_ccsdata_predobbs %>%
   group_by(postdobbs_cat, year_brfss) %>% 
+  summarise(mean_ccs_cmplnt = mean(ccs_cmplnt_y1n0))
+
+prop_ccs_cmplnt_year_overall <- 
+  brfss_final_ccsdata_predobbs %>%
+  group_by(year_brfss) %>% 
   summarise(mean_ccs_cmplnt = mean(ccs_cmplnt_y1n0))
 
 fig_ccs_year_dobbs <- 
   ggplot(prop_ccs_cmplnt_year, aes(x=year_brfss, y=(mean_ccs_cmplnt)*100)) + 
   geom_point(aes(col=postdobbs_cat)) +
   geom_line(aes(col=postdobbs_cat)) +
-  xlim(c(2017, 2023)) + ylim(c(0, 100)) + theme_bw() +
+  theme_bw() + 
+  scale_x_continuous(limits=c(2017.5, 2022.5), breaks=c(2018,2020,2022), labels=c("2018","2020","2022")) +
+  scale_y_continuous(limits=c(0,100), breaks=c(0,25,50,75,100), labels=c("0%","25%","50%","75%","100%")) +
   scale_color_manual(values=c("#009E73", "#D55E00"), name = "Post-Dobbs abortion access status") +
   theme(plot.title=element_text(hjust=0.5), legend.position="bottom") + 
   labs(title="Cervical cancer screening compliance\nby post-Dobbs abortion access status", 
-       y="% cervical cancer screening compliant", x="BRFSS year",
+       y="% cervical cancer screening compliant", x="BRFSS survey year",
        caption="Only participants who completed their BRFSS\nsurvey prior to June 24, 2022 included")
 
 print(fig_ccs_year_dobbs)
 print(prop_ccs_cmplnt_year)
+print(prop_ccs_cmplnt_year_overall)
 
 ggsave(file="../figures/cervical cancer screening over BRFSS wave for DID.pdf", plot=fig_ccs_year_dobbs, width=6, height=4)
 ggsave(file="../figures/cervical cancer screening over BRFSS wave for DID.png", plot=fig_ccs_year_dobbs, width=6, height=4)
+ggsave(file="../figures/cervical cancer screening over BRFSS wave for DID.jpg", plot=fig_ccs_year_dobbs, width=6, height=4)
 
 ```
 
