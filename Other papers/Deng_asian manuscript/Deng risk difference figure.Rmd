@@ -72,7 +72,7 @@ data_table3 <- data_table3 %>%
 
 \pagebreak
 
-**Below is the figure I created from the data in Table 3**. The figure shows the risk differences and 95% CIs for cervical cancer screening completion in the due (light blue) and overdue (orange) screening groups, and then stratified by Asian ethnic subgroup across the x-axis. 
+**Below is the figure I created from the data in Table 3**. The figure shows the risk differences and 95% CIs for cervical cancer screening completion in the due (light blue) and overdue (orange) screening groups, and then stratified by Asian ethnic subgroup across the x-axis. Additionally, across the top are the total number of STEP participants contributing to the corresponding risk difference and 95% CI below in matching colors. For example, for the Asian Indian due population, in the table above we see 52 + 30 + 8 + 5 = 95 participants, which is the number listed in light blue at the top.
 
 I presented the data this way so you can compare the effectiveness of the DM intervention to the UC/EDU intervention (aka RD and 95% CI) for the due and overdue groups *within* each Asian ethnic subgroup easily, which shows us that within some Asian ethnic subgroups, DM intervention was actually not more effective at increasing screening uptake in the overdue group compared to the due group, which is not what we saw in the STEP main results. Additionally, grouping by color allows us to compare the differences *between* the different Asian ethnic subgroups within each screening group, showing that while the DM intervention was pretty much universally effective (though not significantly), there is indeed heterogeneity across Asian ethnic populations. 
 
@@ -99,7 +99,7 @@ deng_figure <-
 
 print(deng_figure)
 
-ggsave(file="deng_figure.pdf", plot=deng_figure, width=7.5, height=5)
+ggsave(file="deng_figure.jpeg", plot=deng_figure, width=7.5, height=4.5)
 
 ```
 
