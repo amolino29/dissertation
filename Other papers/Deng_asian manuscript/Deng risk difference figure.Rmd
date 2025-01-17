@@ -1,0 +1,114 @@
+---
+title: "Deng risk difference figure"
+author: "Andrea Molino"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: cosmo
+    toc: yes
+---
+
+This Rmarkdown was created for Iris Deng's STEP paper, specifically to create a figure for her **Table 3: Cervical Cancer Screening completion rate by Usual care/educational intervention group and direct-mailing intervention, separated by Asian ethnic subgroups.** We will only be plotting risk differences and their corresponding 95% confidence intervals, as we felt that plotting risk ratios did not add much additional information. However, if needed, a figure for risk ratios and 95% CIs can also be easily created. 
+
+Below are the data used for this analysis pulled directly from Table 3 for verification purposes. 
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(table1)
+library(kableExtra)
+library(tibble)
+
+
+# Read in CSV with data pulled from Iris's Table 3
+data_table3 <- read.csv("C:/Users/amoli/OneDrive/Documents/GitHub/dissertation/Other papers/Deng_asian manuscript/Deng_figure data.csv")
+data_table3 %>% kbl() %>% kable_styling()
+
+```
+
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+# Pull out risk difference, and lower and upper 95% CI bounds from the rd_95ci column
+data_table3 <- data_table3 %>%
+  mutate(
+    rd       = str_extract(rd_95ci, "^[^\\s]+") %>% as.numeric(),
+    lower_95 = str_extract(rd_95ci, "(?<=\\().*?(?=,)") %>% as.numeric(),
+    upper_95 = str_extract(rd_95ci, "(?<=, ).*?(?=\\))") %>% as.numeric()
+  )
+
+# Check that extracted strings were created correctly 
+data_table3 %>% select(rd_95ci, rd, lower_95, upper_95) %>% kbl() %>% kable_styling() 
+
+# Create "total_N" column to represent the total number of participants contributing to a given RD estimate
+data_table3 <- data_table3 %>% 
+  mutate(
+    total_N = uc_edu_denom + uc_edu_num + dm_denom + dm_num
+  )
+
+# Check that summed values were created correctly 
+data_table3 %>% select(uc_edu_denom, uc_edu_num, dm_denom, dm_num, total_N) %>% kbl() %>% kable_styling() 
+
+# Split Asian subgroup names into 2 lines if needed
+data_table3 <- data_table3 %>% 
+  mutate(
+    population_rename = case_when(
+      population == "Asian Indian" ~ "Asian\nIndian", 
+      population == "Other Asian" ~ "Other\nAsian", 
+      population == "Unknown Asian" ~ "Unknown\nAsian",
+      TRUE ~ population
+    )
+  )
+
+
+```
+
+
+\pagebreak
+
+**Below is the figure I created from the data in Table 3**. The figure shows the risk differences and 95% CIs for cervical cancer screening completion in the due (light blue) and overdue (orange) screening groups, and then stratified by Asian ethnic subgroup across the x-axis. 
+
+I presented the data this way so you can compare the effectiveness of the DM intervention to the UC/EDU intervention (aka RD and 95% CI) for the due and overdue groups *within* each Asian ethnic subgroup easily, which shows us that within some Asian ethnic subgroups, DM intervention was actually not more effective at increasing screening uptake in the overdue group compared to the due group, which is not what we saw in the STEP main results. Additionally, grouping by color allows us to compare the differences *between* the different Asian ethnic subgroups within each screening group, showing that while the DM intervention was pretty much universally effective (though not significantly), there is indeed heterogeneity across Asian ethnic populations. 
+
+
+```{r, fig.height = 4.7, fig.width = 8, fig.align = "center", echo=FALSE, include=TRUE, message=FALSE, warning=FALSE}
+# Figure
+dodge <- position_dodge(width = 0.55)
+
+deng_figure <- 
+  ggplot(data_table3, aes(x = population_rename, y = rd, ymin = lower_95, ymax = upper_95, color = step_screengroup)) + 
+  geom_point(size=2.7, position=dodge) + 
+  geom_errorbar(width=0.2, size=0.75, position=dodge) +
+  scale_y_continuous(limits=c(-35, 86), breaks=seq(-30, 75, 15), labels=scales::label_percent(scale=1)) + 
+  geom_hline(yintercept=0, linetype = "dashed", color = "gray50", size=0.5) + 
+  labs(color = "Screening history group", 
+       y = "Risk difference (95% CI)", 
+       x = "Asian ethnic subgroup") +
+  scale_color_manual(values=c("#56B4E9", "#E69F00")) +
+  theme_light() +
+  theme(legend.position = "bottom", 
+        axis.text.x = element_text(angle = 0, size=8.7)) + 
+  geom_text(aes(x = population_rename, y = 85, label = total_N, color = step_screengroup),
+            position=dodge, size=3.1, vjust=-0.25, inherit.aes=FALSE, show.legend = FALSE)
+
+print(deng_figure)
+
+ggsave(file="deng_figure.pdf", plot=deng_figure, width=7.5, height=5)
+
+```
+
+
+
+
+
+
+
+```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+
+```

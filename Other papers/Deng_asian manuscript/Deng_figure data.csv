@@ -1,0 +1,17 @@
+﻿population,step_screengroup,rd_95ci,uc_edu_denom,uc_edu_num,dm_denom,dm_num
+Asian Indian,Due,"4.8 (-31.6, 41.2)",52,30,8,5
+Chinese,Due,"10.9 (-6.9, 28.7)",201,106,33,21
+Filipino,Due,"13.1 (-1.0, 27.2)",261,129,56,35
+Japanese,Due,"10.2 (-14.5, 34.9)",86,41,19,11
+Korean,Due,"27.9 (8.0, 47.8)",104,49,24,18
+Other Asian,Due,"5.9 (-30.5, 42.3)",53,30,8,5
+Unknown Asian,Due,"15.2 (-6.2, 36.5)",146,63,24,14
+Vietnamese,Due,"23.9 (5.3, 42.5)",98,55,25,20
+Asian Indian,Overdue,"0.0 (-25.7, 25.7)",44,8,11,2
+Chinese,Overdue,"26.4 (7.8, 44.9)",122,19,31,13
+Filipino,Overdue,"16.8 (1.0, 32.5)",163,40,46,19
+Japanese,Overdue,"17.0 (-4.5, 38.5)",75,19,26,11
+Korean,Overdue,"17.7 (-6.4, 41.8)",86,21,19,8
+Other Asian,Overdue,"35.0 (-10.3, 80.3)",44,11,5,3
+Unknown Asian,Overdue,"24.3 (5.8, 42.8)",154,21,29,11
+Vietnamese,Overdue,"14.1 (-15.9, 44.1)",69,19,12,5
