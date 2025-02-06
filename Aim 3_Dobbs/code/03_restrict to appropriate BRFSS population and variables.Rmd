@@ -11,6 +11,8 @@ It also pulls in the variables of interest and formats them correctly and accord
 
 ***AS OF DECEMBER 2024 this file does NOT consolidate 2016 data, as there are some additional considerations for using these data, specifically related to the guidelines in 2016. I'm wanting to talk to Rachel a bit more about this before I incorporate. It also does not pull in 2024 data, as 2024 BRFSS data does not exist yet.***
 
+Want to add another sentence here. 
+
 
 ```{r, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
 # rm(list=ls())
