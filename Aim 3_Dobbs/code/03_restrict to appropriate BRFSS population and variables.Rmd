@@ -114,16 +114,17 @@ brfss_2018 <- brfss_2018 %>% filter(postdobbs_cat %in% c("Accessible", "Banned")
 brfss_2016 <- brfss_2016 %>% filter(postdobbs_cat %in% c("Accessible", "Banned"))
 
 
-### RESTRICTION: keep those between the ages of 30-49 years 
+### RESTRICTION: keep those between the ages of 25-49 years 
+# UPDATED: decided to incude those who are also between 25-29 years, as they have very similar CCS screening guidelines
 table(brfss_2022$`_AGEG5YR`, useNA = "always")
 table(brfss_2020$`_AGEG5YR`, useNA = "always")
 table(brfss_2018$`_AGEG5YR`, useNA = "always")
 table(brfss_2016$`_AGEG5YR`, useNA = "always")
 
-brfss_2022 <- brfss_2022 %>% filter(`_AGEG5YR` %in% c("03", "04", "05", "06"))
-brfss_2020 <- brfss_2020 %>% filter(`_AGEG5YR` %in% c("03", "04", "05", "06"))
-brfss_2018 <- brfss_2018 %>% filter(`_AGEG5YR` %in% c("03", "04", "05", "06"))
-brfss_2016 <- brfss_2016 %>% filter(`_AGEG5YR` %in% c("03", "04", "05", "06"))
+brfss_2022 <- brfss_2022 %>% filter(`_AGEG5YR` %in% c("02", "03", "04", "05", "06"))
+brfss_2020 <- brfss_2020 %>% filter(`_AGEG5YR` %in% c("02", "03", "04", "05", "06"))
+brfss_2018 <- brfss_2018 %>% filter(`_AGEG5YR` %in% c("02", "03", "04", "05", "06"))
+brfss_2016 <- brfss_2016 %>% filter(`_AGEG5YR` %in% c("02", "03", "04", "05", "06"))
 
 
 ### RESTRICTION: only keep females 
@@ -369,8 +370,8 @@ brfss_final <- brfss_final %>%
 # Age
 brfss_final <- brfss_final %>% rename(age_cat = `_AGEG5YR`) 
 brfss_final$age_cat <- factor(brfss_final$age_cat, 
-                              levels = c("03", "04", "05", "06"), 
-                              labels = c("30-34", "35-39", "40-44", "45-49"))
+                              levels = c("02", "03", "04", "05", "06"), 
+                              labels = c("25-29", "30-34", "35-39", "40-44", "45-49"))
   
 table(brfss_final$age_cat, useNA = "always")
 
