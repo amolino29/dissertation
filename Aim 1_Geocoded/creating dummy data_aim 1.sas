@@ -23,6 +23,39 @@ RUN;
 
 proc contents data=work.step_andrea_blank; run; 
 
+*** Retain fully blank dataset but create "step_andrea_data" that will store the simulated data; 
+data work.step_andrea_data; set work.step_andrea_blank; run; 
+
+
+*** Create simulated data for dummy analysis; 
+data work.step_andrea_data;
+    if 0 then set work.step_andrea_data;            /* Load variable structure but no data since there are no observations */
+    call streaminit(6874);							/* Set random seed */
+    do _n_ = 1 to 31000;						    /* Generate 31,000 observations */
+        array p[3] (0.4 0.3 0.3);				    /* Array of probabilities for each level */
+        history = rand("Table", of p[*]);	 		/* Generate random value for the history column */
+        output;
+    end;
+run;
+
+/* Create format for the history variable */
+proc format;
+    value history_fmt
+        1 = 'Adherent'
+        2 = 'Overdue'
+        3 = 'Unknown';
+run;
+
+/* Check the distribution */
+proc freq data=work.step_andrea_data;
+    format history history_fmt.;
+    tables history / nocum;
+run;
+
+proc contents data=work.step_andrea_data; run;
+
+
+
 
 *** VARIABLES THAT NEED TO BE SIMULATED: 
 * history - 1,2,3
@@ -37,3 +70,21 @@ proc contents data=work.step_andrea_blank; run;
 * total_traveltime
 * bmi
 * enrollbfrand_m;
+
+
+data Table(keep=x); 
+call streaminit(4321); 
+p1=0.5; p2=0.2; p3=0.3; 
+do i = 1 to 100; 
+	x=rand("Table", p1, p2, p3);
+	output; 
+end; 
+run; 
+
+proc freq data=Table; 
+	tables x / nocum; 
+run; 
+
+
+
+
