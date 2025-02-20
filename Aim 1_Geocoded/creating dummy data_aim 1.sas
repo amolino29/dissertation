@@ -6,6 +6,10 @@
 - Thus, I will be simulating dummy data based on my variables of interest and the values John Lin provided in the codebook, and then will 
   be sending the dummy data to Hongyuan at KPWHRI to run the actual analysis on real STEP data. 
 - The data produced by Hongyuan will be the "real" data, which I will then turn into my dissertation Aim 1 results.
+- This data should NOT DO ANY DATA CLEANING OR RECODING/COLLAPSING. It should solely produce a dataset that would look EXACTLY like what
+  Hongyuan's will look like when she opens up SAS with the STEP data. For example, I created "enrollbfrand_m", and while I will actually 
+  be using a categorized version of this variable, I will not be doing that procedure in this code. This is the same situation as 
+  formatting, that will be done in the "analytic" file. 
 */ 
 
 
@@ -18,7 +22,7 @@ run;
 *** Only keep necessary variables; 
 data work.step_andrea_blank;
 	set work.step_andrea_blank;
-	keep history screenarm group group_analytic rand_date completion agegroup race ethnicity total_traveltime bmi enrollbfrand_m;
+	keep history screenarm group_analytic rand_date agegroup race ethnicity total_traveltime_c bmigroup enrollbfrand_m;
 RUN;
 
 proc contents data=work.step_andrea_blank; run; 
@@ -29,62 +33,165 @@ data work.step_andrea_data; set work.step_andrea_blank; run;
 
 *** Create simulated data for dummy analysis; 
 data work.step_andrea_data;
-    if 0 then set work.step_andrea_data;            /* Load variable structure but no data since there are no observations */
-    call streaminit(6874);							/* Set random seed */
-    do _n_ = 1 to 31000;						    /* Generate 31,000 observations */
-        array p[3] (0.4 0.3 0.3);				    /* Array of probabilities for each level */
-        history = rand("Table", of p[*]);	 		/* Generate random value for the history column */
+    if 0 then set work.step_andrea_data;            								 /* Load variable structure but no data since there are no observations */
+    call streaminit(6874);															 /* Set random seed */
+    do _n_ = 1 to 31000;						        							 /* Generate 31,000 observations */
+
+		*** screenarm: randomization assignment with history incorporated;
+		array p_screenarm[10] (0.12 0.13 0.13 0.05 0.17 0.04 0.05 0.09 0.11 0.11);   /* Array of probabilities for each level */
+		array l_screenarm[10] (1    2    3    4    11   12   14   21   22   23);     /* Array of levels that we want for the variable */ 
+		screenarm = l_screenarm[rand("Table", of p_screenarm[*])];    				 /* Generate random value for the history column */
+
+		*** history: prior CC screening history type, created based off of screenarm above;
+		if screenarm in (1,2,3,4)  then history=1; 
+		if screenarm in (11,12,14) then history=2; 
+		if screenarm in (21,22,23) then history=3; 
+
+		*** group_analytic: sequence of home HPV kit return and Pap/HPV, collapsed to kit, pap, none;
+		* There needs to be a different distribution for each screenarm, as only some of these arms were able to use the kit, and the distributions also vary by screening history;
+		array l_group_analytic_49[2]   (4 9);
+		array l_group_analytic_1469[4] (1 4 6 9);
+
+		* ADHERENT;
+		array p_group_analytic_49_auc[2] (0.47 0.53); 
+		array p_group_analytic_49_aedu[2] (0.48 0.52); 
+		array p_group_analytic_1469_aopt[4] (0.10 0.402 0.008 0.49); 
+		array p_group_analytic_1469_adm[4] (0.37 0.22 0.03 0.38); 
+
+	    if screenarm = 1 then do; 
+	      	group_analytic = l_group_analytic_49[rand("Table", of p_group_analytic_49_auc[*])]; 
+		end;
+
+	    if screenarm = 2 then do; 
+	      	group_analytic = l_group_analytic_49[rand("Table", of p_group_analytic_49_aedu[*])]; 
+		end;
+
+	    if screenarm = 3 then do; 
+			group_analytic = l_group_analytic_1469[rand("Table", of p_group_analytic_1469_aopt[*])]; 
+		end;
+
+	    if screenarm = 4 then do; 
+			group_analytic = l_group_analytic_1469[rand("Table", of p_group_analytic_1469_adm[*])]; 
+		end;
+
+		* OVERDUE; 
+		array p_group_analytic_49_ouc[2] (0.19 0.81);
+      	array p_group_analytic_49_oedu[2] (0.19 0.81); 
+      	array p_group_analytic_1469_odm[4] (0.21 0.135 0.01 0.645); 
+
+		if screenarm = 11 then do;  
+      		group_analytic = l_group_analytic_49[rand("Table", of p_group_analytic_49_ouc[*])]; 
+        end;
+
+    	if screenarm = 12 then do
+      		group_analytic = l_group_analytic_49[rand("Table", of p_group_analytic_49_oedu[*])]; 
+        end;
+
+    	if screenarm = 14 then do; 
+      		group_analytic = l_group_analytic_1469[rand("Table", of p_group_analytic_1469_odm[*])]; 
+        end;
+
+		* UNKNOWN;
+	    array p_group_analytic_49_uuc[2] (0.18 0.82);
+	    array p_group_analytic_49_uedu[2] (0.16 0.84); 
+	    array p_group_analytic_1469_uopt[4] (0.03 0.15 0.002 0.818); 
+
+   		if screenarm = 21 then do;  
+			group_analytic = l_group_analytic_49[rand("Table", of p_group_analytic_49_uuc[*])]; 
+        end;
+
+		if screenarm = 22 then do
+			group_analytic = l_group_analytic_49[rand("Table", of p_group_analytic_49_uedu[*])]; 
+        end;
+
+		if screenarm = 23 then do; 
+			group_analytic = l_group_analytic_1469[rand("Table", of p_group_analytic_1469_uopt[*])]; 
+        end;
+
+		*** rand_date: randomization date;
+		do until (22239 <= rand_date <= 22673); 
+			rand_date = rand('NORMAL', 22450, 127);
+		end; 
+		rand_date = floor(rand_date); 
+
+		*** agegroup: Age group at randomization date;
+		array p_agegroup[7] (0.15 0.15 0.14 0.14 0.14 0.14 0.14); 
+		array l_agegroup[7] (1    2    3    4    5    6    7); 
+		agegroup = l_agegroup[rand("Table", of p_agegroup[*])]; 
+
+		*** race;
+		array p_race[8] (0.58 0.11 0.04 0.01 0.01 0.03 0.03 0.19); 
+		array l_race[8] (1    2    3    4    5    6    7    9); 
+		race = l_race[rand("Table", of p_race[*])]; 
+
+		*** ethnicity;  
+		array p_ethnicity[3] (0.47 0.47 0.06); 
+		array l_ethnicity[3] (0    1    9); 
+		ethnicity = l_ethnicity[rand("Table", of p_ethnicity[*])]; 
+
+		*** total_traveltime_c: Travel time from women's home to primary care clinic;
+		array p_total_traveltime_c[5] (0.33 0.3498 0.16 0.16 0.0002); 
+		array l_total_traveltime_c[5] (2    4      6    7    9); 
+		total_traveltime_c = l_total_traveltime_c[rand("Table", of p_total_traveltime_c[*])]; 		
+
+		*** bmigroup: BMI;
+		array l_bmigroup[7] (1 2 3 4 5 6 9);
+
+		if history = 1 then do; 
+			array p_bmigroup1[7] (0.01 0.32 0.28 0.18 0.11 0.10 0); 
+			bmigroup = l_bmigroup[rand("Table", of p_bmigroup1[*])]; 
+        end;
+
+		if history = 2 then do; 
+			array p_bmigroup2[7] (0.008 0.17 0.17 0.14 0.09 0.092 0.33); 
+			bmigroup = l_bmigroup[rand("Table", of p_bmigroup2[*])]; 
+        end;
+
+		if history = 3 then do; 
+			array p_bmigroup3[7] (0.005 0.12 0.11 0.085 0.05 0.06 0.57); 
+			bmigroup = l_bmigroup[rand("Table", of p_bmigroup3[*])]; 
+        end;	
+
+		*** enrollbfrand_m: Number of months enrolled BEFORE randomization; 
+		* Those with unknown history only had <3.25 years of enrollment, but full range allowed for due and overdue;
+		if history in (1,2) then do; 
+			do until (0 <= enrollbfrand_m <= 408);
+            	enrollbfrand_m = rand('NORMAL', 69.4, 85.6);
+			end; 
+		end; 
+
+		if history in (3) then do; 
+			do until (0 <= enrollbfrand_m < 39);
+            	enrollbfrand_m = rand('NORMAL', 20, 10);
+			end; 
+        end;
+
         output;
     end;
 run;
 
-/* Create format for the history variable */
-proc format;
-    value history_fmt
-        1 = 'Adherent'
-        2 = 'Overdue'
-        3 = 'Unknown';
-run;
 
 /* Check the distribution */
 proc freq data=work.step_andrea_data;
-    format history history_fmt.;
+*    format history history_fmt.;
     tables history / nocum;
+	tables screenarm / nocum; 
+	tables group_analytic / nocum; 
+	tables agegroup / nocum;
+	tables bmigroup / nocum;
+	tables total_traveltime_c / nocum; 
+	tables ethnicity / nocum;
+	tables race / nocum; 
+run;
+
+proc freq data=work.step_andrea_data;
+    tables bmigroup*history / nocum;
+	tables group_analytic*screenarm;
+run;
+
+proc means data=work.step_andrea_data min max mean p25 p50 p75 p95 n nmiss;
+var enrollbfrand_m rand_date; 
 run;
 
 proc contents data=work.step_andrea_data; run;
-
-
-
-
-*** VARIABLES THAT NEED TO BE SIMULATED: 
-* history - 1,2,3
-* screenarm
-* group
-* group_analytic
-* rand_date
-* completion
-* agegroup
-* race
-* ethnicity
-* total_traveltime
-* bmi
-* enrollbfrand_m;
-
-
-data Table(keep=x); 
-call streaminit(4321); 
-p1=0.5; p2=0.2; p3=0.3; 
-do i = 1 to 100; 
-	x=rand("Table", p1, p2, p3);
-	output; 
-end; 
-run; 
-
-proc freq data=Table; 
-	tables x / nocum; 
-run; 
-
-
-
 
