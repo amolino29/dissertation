@@ -5,6 +5,10 @@
   while still obtaining "real" data due to data suppression <5 cells restrictions around STEP data. 
 - Thus, I will be simulating dummy data based on my variables of interest and the values John Lin provided in the codebook, and then will 
   be sending the dummy data to Hongyuan at KPWHRI to run the actual analysis on real STEP data. 
+- Once all of the variables of interest were simulated, their levels and ranges were checked to make sure they represent the real 
+  data (generally, distributions did not need to be perfect). Variable logic was also cross checked with other variables as needed. For 
+  example, those in the overdue history=2 group were not randomized to receive the opt-in intervention, and that has been coded accordingly. Or 
+  those in the unknown history=3 group all had been enrolled at Kaiser for <39 months (<3.25 years). 
 - The data produced by Hongyuan will be the "real" data, which I will then turn into my dissertation Aim 1 results.
 - This data should NOT DO ANY DATA CLEANING OR RECODING/COLLAPSING. It should solely produce a dataset that would look EXACTLY like what
   Hongyuan's will look like when she opens up SAS with the STEP data. For example, I created "enrollbfrand_m", and while I will actually 
@@ -109,13 +113,14 @@ data work.step_andrea_data;
         end;
 
 		*** rand_date: randomization date;
+		* Floor round so each integer represents 1 calendar day; 
 		do until (22239 <= rand_date <= 22673); 
 			rand_date = rand('NORMAL', 22450, 127);
 		end; 
 		rand_date = floor(rand_date); 
 
 		*** agegroup: Age group at randomization date;
-		array p_agegroup[7] (0.15 0.15 0.14 0.14 0.14 0.14 0.14); 
+		array p_agegroup[7] (0.16 0.15 0.14 0.14 0.14 0.14 0.13); 
 		array l_agegroup[7] (1    2    3    4    5    6    7); 
 		agegroup = l_agegroup[rand("Table", of p_agegroup[*])]; 
 
@@ -125,12 +130,12 @@ data work.step_andrea_data;
 		race = l_race[rand("Table", of p_race[*])]; 
 
 		*** ethnicity;  
-		array p_ethnicity[3] (0.47 0.47 0.06); 
+		array p_ethnicity[3] (0.64 0.06 0.30); 
 		array l_ethnicity[3] (0    1    9); 
 		ethnicity = l_ethnicity[rand("Table", of p_ethnicity[*])]; 
 
 		*** total_traveltime_c: Travel time from women's home to primary care clinic;
-		array p_total_traveltime_c[5] (0.33 0.3498 0.16 0.16 0.0002); 
+		array p_total_traveltime_c[5] (0.33 0.3498 0.16 0.1598 0.0004); 
 		array l_total_traveltime_c[5] (2    4      6    7    9); 
 		total_traveltime_c = l_total_traveltime_c[rand("Table", of p_total_traveltime_c[*])]; 		
 
@@ -154,6 +159,7 @@ data work.step_andrea_data;
 
 		*** enrollbfrand_m: Number of months enrolled BEFORE randomization; 
 		* Those with unknown history only had <3.25 years of enrollment, but full range allowed for due and overdue;
+		* Then floor round so each integer represents 1 month;
 		if history in (1,2) then do; 
 			do until (0 <= enrollbfrand_m <= 408);
             	enrollbfrand_m = rand('NORMAL', 69.4, 85.6);
@@ -165,33 +171,24 @@ data work.step_andrea_data;
             	enrollbfrand_m = rand('NORMAL', 20, 10);
 			end; 
         end;
+		enrollbfrand_m = floor(enrollbfrand_m); 
 
         output;
     end;
 run;
 
+/* Drop all l_ and p_ array variables from dataset */ 
+data work.step_andrea_data;
+	set work.step_andrea_data (drop=p_: l_:);
+run; 
 
-/* Check the distribution */
-proc freq data=work.step_andrea_data;
-*    format history history_fmt.;
-    tables history / nocum;
-	tables screenarm / nocum; 
-	tables group_analytic / nocum; 
-	tables agegroup / nocum;
-	tables bmigroup / nocum;
-	tables total_traveltime_c / nocum; 
-	tables ethnicity / nocum;
-	tables race / nocum; 
-run;
-
-proc freq data=work.step_andrea_data;
-    tables bmigroup*history / nocum;
-	tables group_analytic*screenarm;
-run;
-
-proc means data=work.step_andrea_data min max mean p25 p50 p75 p95 n nmiss;
-var enrollbfrand_m rand_date; 
-run;
-
+/* Compare formats and such between the simulated dataset and the blank dataset */ 
 proc contents data=work.step_andrea_data; run;
+proc contents data=work.step_andrea_blank; run;
+
+/* Export fully simulated data as a SAS dataset */ 
+libname aim1 "C:\Users\amolino\Documents\GitHub\dissertation\Aim 1_Geocoded\data";
+data aim1.step_andrea_data_aim1_sim;
+    set work.step_andrea_data;
+run;
 
