@@ -35,7 +35,7 @@ proc contents data=work.step_andrea_blank; run;
 data work.step_andrea_data; set work.step_andrea_blank; run; 
 
 
-*** Create simulated data for dummy analysis; 
+*** Create simulated STEP data for dummy analysis; 
 data work.step_andrea_data;
     if 0 then set work.step_andrea_data;            								 /* Load variable structure but no data since there are no observations */
     call streaminit(6874);															 /* Set random seed */
@@ -185,6 +185,57 @@ run;
 /* Compare formats and such between the simulated dataset and the blank dataset */ 
 proc contents data=work.step_andrea_data; run;
 proc contents data=work.step_andrea_blank; run;
+
+/* Create FIPS variable by pulling in GEOID census tracts from an existing SAS dataset that I created (1784 in total) */ 
+libname mylib 'C:\Users\amolino\Documents\GitHub\dissertation\Aim 1_Geocoded\code_compiling geocoded data\final geocoded data';
+data work.fips_data;
+	set mylib.step_geocoded_data_onlyquartiles;
+	keep GEOID king_county;
+run; 
+
+data work.fips_data; 
+	set work.fips_data; 
+	GEOID_char = put(GEOID, 11.); 
+	format GEOID_char $11.;
+	label GEOID_char = "2020 Census Tract FIPS code"; 
+run; 
+
+proc contents data=work.fips_data; run;
+
+* Dataset with FIPS code in 11. string format has now been created;  
+* The next step is to create a dummy variable for GEOID for the 31,000 fake participants we have. I will do this by creating a 
+* dataset with 31,000 GEOID_char observations with real GEOIDs so I can merge on variables in the analytic dataset;
+* The approach below does the following - it first creates a dataset called "unique_geoids" that only has our 1784 FIPS codes of
+* interest in the variable "GEOID_char". I then create a value "num_geoids" that is 1784, which we use to divide by 31,000 which 
+* is our number of observations to create the number of "reps" that are needed. We then use this "reps" value to create our 
+* "simulated_fips" dataset. However, the original dataset has 32,112 observations (which is 1784 * 18, which makes sense, so all 
+* FIPS codes are guaranteed to be represented). However, we need our dataset to be exactly 31,000 observations to be able to merge 
+* with step_andrea_data, which is what I do in the final dataset;
+proc sort data=work.fips_data out=work.unique_geoids NODUPKEY;
+	by GEOID_char;
+run; 
+
+data work.unique_geoids; set work.unique_geoids; keep GEOID_char; run;
+
+proc sql;  
+	SELECT count(*) INTO :num_geoids FROM unique_geoids; /* Should be 1784 */
+quit; 
+
+data _NULL_; replications = ceil(31000 / &num_geoids); CALL symput('reps', replications); run;
+
+data work.simulated_fips;
+	set work.unique_geoids;
+		do rep = 1 to &reps;
+			output;
+		end;
+	drop rep;
+run; 
+
+data work.simulated_fips; set work.simulated_fips(obs=31000); run;
+
+data work.step_andrea_data; 
+	merge work.step_andrea_data work.simulated_fips; 
+run; 
 
 /* Export fully simulated data as a SAS dataset */ 
 libname aim1 "C:\Users\amolino\Documents\GitHub\dissertation\Aim 1_Geocoded\data";
