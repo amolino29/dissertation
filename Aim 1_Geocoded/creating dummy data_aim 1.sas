@@ -189,15 +189,8 @@ proc contents data=work.step_andrea_blank; run;
 /* Create FIPS variable by pulling in GEOID census tracts from an existing SAS dataset that I created (1784 in total) */ 
 libname mylib 'C:\Users\amolino\Documents\GitHub\dissertation\Aim 1_Geocoded\code_compiling geocoded data\final geocoded data';
 data work.fips_data;
-	set mylib.step_geocoded_data_onlyquartiles;
-	keep GEOID king_county;
-run; 
-
-data work.fips_data; 
-	set work.fips_data; 
-	GEOID_char = put(GEOID, 11.); 
-	format GEOID_char $11.;
-	label GEOID_char = "2020 Census Tract FIPS code"; 
+	set mylib.step_geocoded_data;
+	keep GEOID_char king_county;
 run; 
 
 proc contents data=work.fips_data; run;
